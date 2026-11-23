@@ -19,7 +19,6 @@ from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    reject_container_call_result,
     reject_undiscovered_dataclass_member,
 )
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
@@ -55,7 +54,7 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
-from quadrants.lang.util import is_data_oriented
+from quadrants.lang.util import is_data_oriented, is_dataclass_instance
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -545,7 +544,11 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_Call(ctx: FuncCompilePassContext, node: ast.Call) -> Any | None:
         value = CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
-        reject_container_call_result(value)
+        if is_dataclass_instance(value) or is_data_oriented(value):
+            raise exception.QuadrantsRuntimeTypeError(
+                "Calls returning Python dataclass or data-oriented instances are unsupported inside kernels. "
+                "Create these objects in Python and pass them as kernel arguments or through stored attributes."
+            )
         return value
 
     @staticmethod

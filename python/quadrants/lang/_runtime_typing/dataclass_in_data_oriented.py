@@ -120,12 +120,3 @@ def reject_undiscovered_dataclass_member(
             "Dataclasses returned by properties or added after the first kernel call are unsupported. "
             "Store the dataclass in an ordinary instance attribute before the first kernel call."
         )
-
-
-def reject_container_call_result(py_obj: Any) -> None:
-    """Reject calls returning Python dataclass or data-oriented instances during compilation."""
-    if is_dataclass_instance(py_obj) or is_data_oriented(py_obj):
-        raise QuadrantsRuntimeTypeError(
-            "Calls returning Python dataclass or data-oriented instances are unsupported inside kernels. "
-            "Create these objects in Python and pass them as kernel arguments or through stored attributes."
-        )
