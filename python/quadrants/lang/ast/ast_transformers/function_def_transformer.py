@@ -28,6 +28,7 @@ from quadrants.lang._final.final_dataclass_fields import (
 )
 from quadrants.lang._name_utils import (
     create_flat_name,
+    create_flat_name_from_parts,
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
@@ -35,6 +36,7 @@ from quadrants.lang._runtime_typing.deferred_errors import (
     DeferredMemberError,
     DeferredMemberType,
 )
+from quadrants.lang._template_mapper_hotpath import _extract_arg
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,
@@ -45,7 +47,9 @@ from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
 )
 from quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder import (
     bind_data_oriented_runtime_scalars,
+    collect_runtime_members_from_data_oriented_args,
     register_runtime_dataclass_schema,
+    register_runtime_dataclass_schemas,
 )
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
@@ -158,9 +162,11 @@ class FunctionDefTransformer:
         ctx: FuncCompilePassContext,
         argument_name: str,
         argument_type: Any,
-        this_arg_features: tuple[Any, ...],
+        this_arg_features: tuple[Any, ...] | None,
         arg_value: Any = None,
+        reject_in_static_scope: bool = False,
     ) -> None:
+        """Bind an argument and its nested dataclass members to compiler values."""
         pruning = ctx.kernel_compile_context.pruning
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
@@ -187,25 +193,35 @@ class FunctionDefTransformer:
                 if isinstance(field.type, DeferredMemberType):
                     value = field.type.bind(dotted_argument_path_from_flat_name(flat_name))
                 elif field.name in final_names:
+                    # Keep the Python value so qd.static(config.field) can evaluate it at compile time.
                     value = child
                 elif dataclasses.is_dataclass(field.type):
                     FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
-                        ctx, flat_name, field.type, this_arg_features[field_idx], child
+                        ctx,
+                        flat_name,
+                        field.type,
+                        this_arg_features[field_idx] if this_arg_features is not None else None,
+                        child,
+                        reject_in_static_scope,
                     )
                     value = child
                 elif is_data_oriented(child):
-                    raise QuadrantsSyntaxError(
-                        "Data-oriented objects inside Python dataclass fields are unsupported. "
-                        "Store the dataclass on the data-oriented object instead."
-                    )
+                    # Attribute access rejects this member if the kernel uses it.
+                    value = child
                 else:
+                    features = (
+                        this_arg_features[field_idx]
+                        if this_arg_features is not None
+                        else _extract_arg(False, child, field.type, flat_name)
+                    )
                     needs_declaration_call, value = FunctionDefTransformer._decl_and_create_variable(
-                        ctx, field.type, flat_name, this_arg_features[field_idx], "", child
+                        ctx, field.type, flat_name, features, "", child
                     )
                     if needs_declaration_call:
                         decl_type_func, type_args = value
                         value = decl_type_func(*type_args)
-                bindings[member_key] = MemberBinding(flat_name, field.type, value)
+                is_scalar = id(field.type) in primitive_types.type_ids or isinstance(field.type, DataTypeCxx)
+                bindings[member_key] = MemberBinding(flat_name, field.type, value, reject_in_static_scope and is_scalar)
         else:
             needs_declaration_call, obj = FunctionDefTransformer._decl_and_create_variable(
                 ctx,
@@ -244,8 +260,25 @@ class FunctionDefTransformer:
                 ctx.py_args[i] if ctx.py_args is not None else None,
             )
 
+        register_runtime_dataclass_schemas(ctx)
+        scalar_members, dataclass_members = collect_runtime_members_from_data_oriented_args(
+            ctx.py_args, ctx.func.arg_metas
+        )
+        for arg_idx, path, dataclass_instance in dataclass_members:
+            flat_name = create_flat_name_from_parts([ctx.func.arg_metas[arg_idx].name, *path])
+            if ctx.kernel_compile_context.pruning.enforcing and not ctx.kernel_compile_context.pruning.is_used(
+                ctx.func.func_id, flat_name
+            ):
+                continue
+            schema, _ = ctx.kernel_compile_context.current_pass.runtime_schema_by_id[id(dataclass_instance)]
+            FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
+                ctx, flat_name, schema, None, dataclass_instance, reject_in_static_scope=True
+            )
+            ctx.kernel_compile_context.current_pass.launch_infos_for_root_dataclasses_in_data_oriented.append(
+                (arg_idx, path, flat_name, schema)
+            )
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
-        bind_data_oriented_runtime_scalars(ctx)
+        bind_data_oriented_runtime_scalars(ctx, scalar_members)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []
@@ -283,6 +316,10 @@ class FunctionDefTransformer:
         # Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path
         # taken to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
+            # Already handled by _bind_kernel_arg_or_nested_dataclass.
+            if id(obj) in ctx.kernel_compile_context.current_pass.bound_dataclass_ids:
+                return
+
             if is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)

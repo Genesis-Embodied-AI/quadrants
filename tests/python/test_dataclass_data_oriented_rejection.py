@@ -64,8 +64,9 @@ def test_data_oriented_dataclass_member_disables_artifact_lookup() -> None:
     assert dataclass_to_repr(False, ("0",), state, schema) is _FAIL_FASTCACHE
 
 
+@pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_function_accepts_unused_unsupported_dataclass_member() -> None:
+def test_function_accepts_unused_unsupported_dataclass_member(in_data_oriented: bool) -> None:
     """A function may receive a dataclass whose unsupported member appears only in an inactive static branch."""
 
     @qd.data_oriented
@@ -78,7 +79,7 @@ def test_function_accepts_unused_unsupported_dataclass_member() -> None:
         inner: qd.Template
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, state: State) -> None:
             self.state = state
 
@@ -88,10 +89,19 @@ def test_function_accepts_unused_unsupported_dataclass_member() -> None:
             return state.inner.count
         return 3
 
-    @qd.kernel(fastcache=True)
-    def run(owner: qd.Template) -> qd.i32:
-        return unused(owner.state)
+    if in_data_oriented:
 
-    owner = Owner(State(Inner()))
-    assert run(owner) == 3
-    assert run(owner) == 3
+        @qd.kernel(fastcache=True)
+        def run(data_oriented_obj: qd.Template) -> qd.i32:
+            return unused(data_oriented_obj.state)
+
+    else:
+
+        @qd.kernel(fastcache=True)
+        def run(state: State) -> qd.i32:
+            return unused(state)
+
+    state = State(Inner())
+    arg = DataOriented(state) if in_data_oriented else state
+    assert run(arg) == 3
+    assert run(arg) == 3

@@ -59,6 +59,7 @@ jobs:
           A deletion is FINE if:
           - The code the comment described was also deleted
           - The comment is no longer correct
+          - The information is preserved in shorter or nearby comments, apparent from nearby code, or covered by API guides
 
           Use the @@ hunk headers and --- file headers to determine file paths and line numbers.
           Do NOT modify any files.

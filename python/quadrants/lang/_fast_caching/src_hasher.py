@@ -62,7 +62,7 @@ _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
 # Bump when persisted schemas or compilation rules make older cache artifacts incompatible.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v13-runtime-dataclass-bindings"
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v14-runtime-dataclass-bindings"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:

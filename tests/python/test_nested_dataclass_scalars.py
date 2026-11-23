@@ -1,4 +1,4 @@
-"""Dataclass scalar parameters retain live values and compatible alias bindings beneath data-oriented owners."""
+"""Dataclass scalar parameters retain live values and compatible alias bindings inside data-oriented objects."""
 
 from dataclasses import dataclass
 from typing import Final
@@ -11,95 +11,70 @@ import quadrants as qd
 from tests.helpers import test_utils
 
 
-@pytest.mark.parametrize("fastcache", [False, True])
-@test_utils.test(offline_cache=True, require=qd.extension.data64)
-def test_nested_scalar_aliases(fastcache: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+@test_utils.test(offline_cache=False)
+def test_nested_scalar_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
     """Shared and separate containers use compatible kernels; warmed calls reuse the alias key."""
 
     @dataclass
     class State:
-        value: qd.i64
+        value: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, shared: bool) -> None:
-            self.first = State(np.int64(2**33))
-            self.second = self.first if shared else State(np.int64(7))
+            self.first = State(3)
+            self.second = self.first if shared else State(7)
             self.aliases = (self.second,)
 
-    @qd.kernel(fastcache=fastcache)
-    def read(owner: qd.Template) -> qd.i64:
-        return owner.first.value + owner.aliases[0].value
+    @qd.kernel
+    def read(data_oriented_obj: qd.Template) -> int:
+        return data_oriented_obj.first.value + data_oriented_obj.aliases[0].value
 
     for shared in (False, True, False, True):
-        owner = Owner(shared)
-        assert read(owner) == (2**34 if shared else 2**33 + 7)
-        owner.second.value = np.int64(11)
+        data_oriented_obj = DataOriented(shared)
+        assert read(data_oriented_obj) == (6 if shared else 3 + 7)
+        data_oriented_obj.second.value = 11
         count = len(read._primal.materialized_kernels)
-        assert read(owner) == (22 if shared else 2**33 + 11)
+        assert read(data_oriented_obj) == (22 if shared else 3 + 11)
         assert len(read._primal.materialized_kernels) == count
 
     def unexpected_walk(args: tuple[object, ...]) -> None:
         raise AssertionError("A warmed call must reuse its cached alias key")
 
     monkeypatch.setattr("quadrants.lang._container_aliases.get_container_alias_key", unexpected_walk)
-    assert read(owner) == 22
+    assert read(data_oriented_obj) == 22
 
 
-@test_utils.test(offline_cache=True)
-def test_nested_scalar_disk_cache() -> None:
-    """Disk reuse distinguishes alias layouts but accepts new scalar values in the same layout."""
-
-    @dataclass
-    class State:
-        value: int
-
-    @qd.data_oriented
-    class Owner:
-        def __init__(self, shared: bool, value: int) -> None:
-            self.first = State(value)
-            self.second = self.first if shared else State(value + 1)
-
-    @qd.kernel(fastcache=True)
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.second.value
-
-    assert read(Owner(False, 2)) == 3
-    assert read(Owner(True, 2)) == 2
-    assert not read._primal.src_ll_cache_observations.cache_loaded
-    assert read(Owner(True, 8)) == 8
-    assert read._primal.src_ll_cache_observations.cache_loaded
-
-
-@test_utils.test(offline_cache=True)
-def test_nested_scalar_cross_argument_alias() -> None:
-    """Member bindings shared between two owners survive disk reuse and live scalar updates."""
+@pytest.mark.parametrize("in_data_oriented", [False, True])
+@test_utils.test(require=qd.extension.data64)
+def test_dataclass_preserves_i64(in_data_oriented: bool) -> None:
+    """A dataclass scalar keeps its runtime 64-bit width through either argument route."""
 
     @dataclass
     class State:
-        value: int
+        value: qd.i64
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, state: State) -> None:
             self.state = state
 
-    @qd.kernel(fastcache=True)
-    def read(first: qd.Template, second: qd.Template) -> qd.i32:
-        return first.state.value + second.state.value
+    argument_type = qd.Template if in_data_oriented else State
 
-    shared = State(3)
-    first, second = Owner(shared), Owner(shared)
-    assert read(first, second) == 6
-    shared.value = 9
-    assert read(first, second) == 18
-    assert read(Owner(State(2)), Owner(State(7))) == 9
-    assert not read._primal.src_ll_cache_observations.cache_loaded
+    @qd.kernel
+    def read(arg: argument_type) -> qd.i64:
+        if qd.static(in_data_oriented):
+            return arg.state.value
+        return arg.value
+
+    state = State(np.int64(2**33))
+    assert read(DataOriented(state) if in_data_oriented else state) == 2**33
 
 
-@test_utils.test()
-def test_nested_scalar_static_constants() -> None:
-    """Final members remain constants; ordinary owner scalars keep their existing policy."""
+@pytest.mark.parametrize("in_data_oriented", [False, True])
+@test_utils.test(arch=qd.cpu)
+def test_dataclass_scalar_static_constants(in_data_oriented: bool) -> None:
+    """Final members remain compile-time constants through either argument route."""
 
     @dataclass(frozen=True)
     class State:
@@ -108,24 +83,33 @@ def test_nested_scalar_static_constants() -> None:
         value: float
 
     @qd.data_oriented
-    class Owner:
-        def __init__(self) -> None:
-            self.state = State(3, True, 2.5)
+    class DataOriented:
+        def __init__(self, state: State) -> None:
+            self.state = state
             self.offset = 4
 
+    argument_type = qd.Template if in_data_oriented else State
+
     @qd.kernel
-    def read(owner: qd.Template) -> qd.f32:
+    def read(arg: argument_type) -> qd.f32:
         result = 0.0
-        if qd.static(owner.state.enabled):
-            for _ in qd.static(range(owner.state.count)):
-                result += owner.state.value
-        return result + qd.static(owner.offset)
+        if qd.static(in_data_oriented):
+            if qd.static(arg.state.enabled):
+                for _ in qd.static(range(arg.state.count)):
+                    result += arg.state.value
+            return result + qd.static(arg.offset)
+        if qd.static(arg.enabled):
+            for _ in qd.static(range(arg.count)):
+                result += arg.value
+        return result + 4
 
-    assert read(Owner()) == 11.5
+    state = State(3, True, 2.5)
+    assert read(DataOriented(state) if in_data_oriented else state) == 11.5
 
 
-@test_utils.test()
-def test_nested_runtime_scalar_rejects_static() -> None:
+@pytest.mark.parametrize("in_data_oriented", [False, True])
+@test_utils.test(arch=qd.cpu)
+def test_dataclass_runtime_scalar_rejects_static(in_data_oriented: bool) -> None:
     """A runtime dataclass scalar cannot control a static expression."""
 
     @dataclass
@@ -133,21 +117,26 @@ def test_nested_runtime_scalar_rejects_static() -> None:
         value: int
 
     @qd.data_oriented
-    class Owner:
-        def __init__(self) -> None:
-            self.state = State(3)
+    class DataOriented:
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    argument_type = qd.Template if in_data_oriented else State
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return qd.static(owner.state.value)
+    def read(arg: argument_type) -> qd.i32:
+        if qd.static(in_data_oriented):
+            return qd.static(arg.state.value)
+        return qd.static(arg.value)
 
-    with pytest.raises(qd.QuadrantsSyntaxError, match="runtime kernel argument"):
-        read(Owner())
+    state = State(3)
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.static"):
+        read(DataOriented(state) if in_data_oriented else state)
 
 
-@test_utils.test()
-def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
-    """A default owner visited first must not hide the runtime opt-in of another owner sharing its child."""
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_shared_child_keeps_runtime_primitive_opt_in() -> None:
+    """Data-oriented objects sharing a child must each respect their template_primitives setting."""
 
     @qd.data_oriented
     class Child:
@@ -155,12 +144,12 @@ def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
             self.value = 3
 
     @qd.data_oriented
-    class DefaultOwner:
+    class DefaultDataOriented:
         def __init__(self, child: Child) -> None:
             self.child = child
 
     @qd.data_oriented(template_primitives=False)
-    class RuntimeOwner:
+    class RuntimeDataOriented:
         def __init__(self, child: Child) -> None:
             self.child = child
 
@@ -169,46 +158,85 @@ def test_shared_owner_keeps_runtime_primitive_opt_in() -> None:
         return runtime.child.value
 
     child = Child()
-    default, runtime = DefaultOwner(child), RuntimeOwner(child)
+    default, runtime = DefaultDataOriented(child), RuntimeDataOriented(child)
     assert read(default, runtime) == 3
     child.value = 7
     assert read(default, runtime) == 7
 
 
-def test_alias_cache_reuses_graphs_and_releases_owners(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Cache hits skip discovery; new argument combinations reuse graphs without retaining their owners."""
-    import gc
-    import weakref
+@pytest.mark.parametrize("shared", [False, True])
+@test_utils.test(offline_cache=False, require=qd.extension.data64)
+def test_direct_dataclasses_and_dataclasses_in_data_oriented_share_binding(shared: bool) -> None:
+    """Direct dataclass arguments and dataclasses inside data-oriented objects share scalar and array bindings."""
 
-    from quadrants.lang import _container_aliases as aliases
+    @dataclass
+    class Child:
+        count: qd.i64
+        array: qd.Tensor
 
     @dataclass
     class State:
-        value: int
+        unused: int
+        child: Child
 
-    @qd.data_oriented
-    class Owner:
+    @qd.data_oriented(template_primitives=False)
+    class DataOriented:
         def __init__(self, state: State) -> None:
             self.state = state
-            self.cycle = self
+            self.offset = 2
 
-    state = State(3)
-    first, second = Owner(state), Owner(state)
-    args = (first, second, 1)
-    key = aliases.cached_get_container_alias_key(args)
+    @qd.kernel
+    def read(first: State, data_oriented_obj: qd.Template, last: qd.i64) -> qd.i64:
+        return (
+            first.child.count
+            + data_oriented_obj.state.child.count
+            + data_oriented_obj.state.child.array[0]
+            + data_oriented_obj.offset
+            + last
+        )
 
-    def unexpected_walk(py_obj: object) -> None:
-        raise AssertionError("A cached container graph must not be walked again")
+    array = qd.ndarray(qd.i64, shape=1)
+    array[0] = 5
+    first = State(0, Child(np.int64(2**33), array))
+    data_oriented_obj = DataOriented(State(1, first.child if shared else Child(np.int64(7), array)))
+    for count in (9, 11):
+        data_oriented_obj.state.child.count = np.int64(count)
+        assert read(first, data_oriented_obj, 13) == first.child.count + count + 20
+        data_oriented_obj.offset += 1
+        array[0] -= 1
 
-    monkeypatch.setattr(aliases, "_collect_container_ids", unexpected_walk)
-    assert aliases.cached_get_container_alias_key(args) == key
-    state.value = 9
-    for scalar in range(140):
-        changed_args = (first, second, scalar)
-        assert aliases.cached_get_container_alias_key(changed_args) == key
-    first_ref = weakref.ref(first)
-    del args, changed_args, first, second
-    gc.collect()
-    assert first_ref() is None
+
+@pytest.mark.parametrize("in_data_oriented", [False, True])
+@pytest.mark.parametrize("frozen,unsafe_hash", [(False, False), (True, False), (False, True)])
+@test_utils.test(arch=qd.cpu)
+def test_dataclass_launch_cache(in_data_oriented: bool, frozen: bool, unsafe_hash: bool) -> None:
+    """Mutable dataclasses read live scalars; frozen dataclasses reuse cached launches."""
+
+    @dataclass(frozen=frozen, unsafe_hash=unsafe_hash)
+    class State:
+        array: qd.Tensor
+        count: int
+
+    @qd.data_oriented
+    class DataOriented:
+        def __init__(self, state: State) -> None:
+            self.state = state
+
+    argument_type = qd.Template if in_data_oriented else State
+
+    @qd.kernel
+    def read(arg: argument_type) -> qd.i32:
+        if qd.static(in_data_oriented):
+            return arg.state.array[0] + arg.state.count
+        return arg.array[0] + arg.count
+
+    state = State(qd.ndarray(qd.i32, shape=1), 3)
+    arg = DataOriented(state) if in_data_oriented else state
+    state.array[0] = 2
+    assert read(arg) == 5
+    immutable = frozen
+    assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is immutable
+    state.array[0] = 7
+    if not immutable:
+        state.count = 9
+    assert read(arg) == (10 if immutable else 16)

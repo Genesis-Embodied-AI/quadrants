@@ -6,11 +6,11 @@ import dataclasses
 import traceback
 from enum import Enum
 from textwrap import TextWrapper
-from typing import TYPE_CHECKING, Any, List, NamedTuple
+from typing import TYPE_CHECKING, Any, List, Literal, NamedTuple
 
 from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import ASTBuilder
-from quadrants.lang import expr, impl
+from quadrants.lang import impl
 from quadrants.lang._ndrange import ndrange
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.exception import (
@@ -206,7 +206,7 @@ class KernelCompilePassContext:
     def __init__(self, pass_idx: int) -> None:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
-        self.struct_ndarray_launch_info: list[tuple] = []
+        self.struct_ndarray_launch_info: list[tuple[int, int, tuple[str, ...]]] = []
         # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
         self.runtime_dataclass_members: set[tuple[int, str]] = set()
         self.runtime_dataclass_binding_objects: set[int] = set()
@@ -218,7 +218,9 @@ class KernelCompilePassContext:
         # Nested dataclass-typed field      Every declared path    Only paths kept by pruning
         self.bound_dataclass_ids: set[int] = set()
         # (arg_id, template_arg_idx, attr_chain, kind) entries locate live values at launch; kind is 'f', 'i', or 'u'.
-        self.runtime_scalar_launch_infos: list[tuple] = []
+        self.runtime_scalar_launch_infos: list[tuple[int, int, tuple[str, ...], Literal["f", "i", "u"]]] = []
+        # Dataclass roots: (argument index, attribute path, flat name, declared type).
+        self.launch_infos_for_root_dataclasses_in_data_oriented: list[tuple[int, tuple[str, ...], str, type]] = []
         # Carry caller loop depth into fresh qd.func contexts so backward-mode dynamic-range checks see outer loops.
         # Saved and restored around each call.
         self.caller_loop_depth: int = 0
@@ -512,8 +514,6 @@ def resolve_bound_member(func_ctx: FuncCompilePassContext, parent: Any, node: as
         )
     pruning = func_ctx.kernel_compile_context.pruning
     if not pruning.enforcing:
+        # The kernel declares this input even when a @qd.func reads it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, binding.name)
-        if binding.reject_in_static_scope and binding.member_access_result is None and dataclasses.is_dataclass(parent):
-            # Preserve the declared width when discovery reads a nested scalar such as an i64.
-            return expr.Expr(getattr(parent, node.attr), dtype=binding.annotation)
     return binding.member_access_result
