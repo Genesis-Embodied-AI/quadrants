@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from quadrants import _warnings
+
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
     cached_infer_dataclass_type,
@@ -58,9 +60,9 @@ def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: DataOrie
     dataclass_paths = tuple(paths)
     try:
         _dataclass_paths_by_data_oriented_instance[data_oriented_obj] = dataclass_paths
-    except TypeError:
+    except TypeError as error:
         # Named tuples can be data-oriented but cannot be weakly referenced.
-        pass
+        _warnings.warn_uncacheable_weakref(error)
     return dataclass_paths
 
 
