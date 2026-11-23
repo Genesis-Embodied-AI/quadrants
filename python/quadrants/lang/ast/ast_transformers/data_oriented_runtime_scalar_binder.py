@@ -163,7 +163,6 @@ def register_runtime_dataclass_schema(pass_ctx: KernelCompilePassContext, obj: A
     if id(obj) in pass_ctx.runtime_schema_by_id:
         return
     pass_ctx.runtime_schema_by_id[id(obj)] = (schema, name)
-    pass_ctx.runtime_dataclass_binding_objects.add(id(obj))
     for field in dataclasses.fields(schema):
         if dataclasses.is_dataclass(field.type):
             register_runtime_dataclass_schema(pass_ctx, getattr(obj, field.name), field.type, f"{name}.{field.name}")
@@ -177,7 +176,6 @@ def register_runtime_dataclass_schemas(func_ctx: FuncCompilePassContext) -> None
         obj = func_ctx.py_args[index]
         name = func_ctx.func.arg_metas[index].name
         for attr in path:
-            pass_ctx.runtime_dataclass_binding_objects.add(id(obj))
             pass_ctx.runtime_dataclass_members.add((id(obj), attr))
             obj = getattr(obj, attr)
             name += "." + attr

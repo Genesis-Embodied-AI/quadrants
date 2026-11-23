@@ -351,6 +351,8 @@ print(read(data_oriented_obj))  # 7, using the same compiled kernel
 
 Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.
 
+Calls evaluated while compiling a kernel or its `@qd.func` helpers must not return Python dataclass or data-oriented instances. Create these objects outside kernels and pass them as arguments or through stored attributes.
+
 #### Runtime primitives: `template_primitives=False`
 
 Access dataclasses inside data-oriented arguments through stored attributes, such as `data_oriented_obj.state`, rather than through properties, method calls, or indexing.

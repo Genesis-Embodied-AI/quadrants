@@ -209,7 +209,6 @@ class KernelCompilePassContext:
         self.struct_ndarray_launch_info: list[tuple[int, int, tuple[str, ...]]] = []
         # Shared identity-based lookup for dataclass members and data-oriented runtime scalars.
         self.runtime_dataclass_members: set[tuple[int, str]] = set()
-        self.runtime_dataclass_binding_objects: set[int] = set()
         self.runtime_schema_by_id: dict[int, tuple[type, str]] = {}
         self.binding_by_member: dict[tuple[int, str], MemberBinding] = {}
         # IDs of dataclass instances registered in this pass.

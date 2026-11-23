@@ -451,3 +451,33 @@ def test_dataclass_data_oriented_member_rejected_before_fastcache(frozen: bool, 
         with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
             read(arg, via_func)
         assert read._primal.fast_checksum is None
+
+
+@pytest.mark.parametrize("container_kind", ["dataclass", "data_oriented"])
+@pytest.mark.parametrize("already_bound", [False, True])
+@test_utils.test(arch=qd.cpu)
+def test_python_call_returning_container_is_rejected(container_kind: str, already_bound: bool) -> None:
+    """Reject container results even when no runtime binding exists for the returned object."""
+
+    @dataclass
+    class State:
+        value: int
+
+    @qd.data_oriented
+    class DataOriented:
+        def __init__(self) -> None:
+            self.state = State(3)
+
+    result = State(3) if container_kind == "dataclass" else DataOriented()
+
+    def get_container() -> object:
+        """Return the container independently of the kernel argument."""
+        return result
+
+    @qd.kernel
+    def read(arg: qd.Template) -> qd.i32:
+        get_container()
+        return 0
+
+    with pytest.raises(qd.QuadrantsRuntimeTypeError, match="Calls returning Python dataclass or data-oriented"):
+        read(result if already_bound else 0)

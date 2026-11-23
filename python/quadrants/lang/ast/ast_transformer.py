@@ -19,7 +19,7 @@ from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    reject_computed_dataclass_alias,
+    reject_container_call_result,
     reject_undiscovered_dataclass_member,
 )
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
@@ -545,9 +545,7 @@ class ASTTransformer(Builder):
     @staticmethod
     def build_Call(ctx: FuncCompilePassContext, node: ast.Call) -> Any | None:
         value = CallTransformer.build_Call(ctx, node, build_stmt, build_stmts)
-        reject_computed_dataclass_alias(
-            value, ctx.kernel_compile_context.current_pass.runtime_dataclass_binding_objects
-        )
+        reject_container_call_result(value)
         return value
 
     @staticmethod
