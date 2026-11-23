@@ -139,7 +139,6 @@ def prepare(directory, event, run_id, attempt):
         else:
             requested = event["inputs"]["genesis_ref"]
             genesis_sha = github(f"repos/{GENESIS}/commits/{quote(requested, safe='')}")["sha"]
-            image = github(f"repos/{GENESIS}/contents/.github/genesis_image_ver?ref={genesis_sha}")
             runs = pages(
                 f"repos/{REPOSITORY}/actions/workflows/manylinux_wheel.yml/runs?head_sha={main_sha}", "workflow_runs"
             )
@@ -161,7 +160,6 @@ def prepare(directory, event, run_id, attempt):
                 main_cutoff=main_sha,
                 pr=None,
                 bootstrap=True,
-                image_version=base64.b64decode(image["content"]).decode().strip(),
                 activation=str(run_id),
             )
         manifest["wheel"] = validate_wheel(wheel_run, directory / "wheel")
@@ -203,7 +201,6 @@ def collect_results(directory, manifest):
             raise ValueError(f"Both benchmark modes must succeed in attempt {manifest['attempt']}.")
         for name in (f"speed-test-{mode}", f"mem-test-{mode}"):
             artifact_files(run_id, name, directory / name, started_after=matches[0]["started_at"])
-    key = hashlib.sha256(json.dumps([manifest["genesis_sha"], manifest["image_version"]]).encode()).hexdigest()
     for kind, metrics in (("speed", ("runtime_fps", "compile_time")), ("mem", ("max_mem_mb",))):
         for mode in ("0", "1"):
             files = list((directory / f"{kind}-test-{mode}").glob(f"{kind}_test*.txt"))
@@ -220,10 +217,7 @@ def collect_results(directory, manifest):
                 values = [float(row[metric].strip()) for metric in metrics]
                 if any(not math.isfinite(value) or value <= 0 for value in values):
                     raise ValueError("Benchmark measurements must be positive and finite.")
-    manifest.update(
-        compatibility_key=key,
-        baseline_sha=None,
-    )
+    manifest["baseline_sha"] = None
     if manifest["bootstrap"]:
         manifest["baseline_sha"] = manifest["wheel"]["commit"]
     return manifest
@@ -370,7 +364,7 @@ def select_baseline(manifest, records, history, landed=None):
     candidates = [
         record
         for record in records
-        if record.get("compatibility_key") == manifest["compatibility_key"]
+        if record.get("genesis_sha") == manifest["genesis_sha"]
         and record.get("baseline_sha") in positions
         and record["record_id"] != manifest["record_id"]
     ]
@@ -394,7 +388,7 @@ def prepare_comparison(manifest):
         for run in wandb.Api().runs(
             PROJECT,
             filters={
-                "config.compatibility_key": manifest["compatibility_key"],
+                "config.genesis_sha": manifest["genesis_sha"],
                 "config.kind": "record",
                 "state": "finished",
             },
@@ -406,16 +400,13 @@ def prepare_comparison(manifest):
     context = (
         f"Genesis: `{manifest['genesis_ref']}` (`{manifest['genesis_sha']}`)\n\n"
         f"Quadrants candidate: `{manifest['wheel']['commit']}`\n\n"
-        f"Container image: `{manifest['image_version']}`\n\n"
         f"Quadrants baseline: `{baseline['baseline_sha']}`\n\n"
         f"Main cutoff: `{manifest['main_cutoff']}`\n\n"
         f"[Baseline run](https://github.com/{REPOSITORY}/actions/runs/{baseline['run_id']})"
     )
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as stream:
         stream.write(context + "\n")
-    filters = json.dumps(
-        {"config.publication": baseline["publication"], "config.compatibility_key": manifest["compatibility_key"]}
-    )
+    filters = json.dumps({"config.publication": baseline["publication"], "config.genesis_sha": manifest["genesis_sha"]})
     with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
         for key, value in dict(wandb_project=PROJECT.split("/")[1], wandb_filters=filters).items():
             delimiter = hashlib.sha256(value.encode()).hexdigest()

@@ -35,8 +35,6 @@ def manifest():
         activation="100",
         pr=12,
         genesis_sha="genesis",
-        image_version="1_25",
-        compatibility_key="environment",
         bootstrap=False,
         head_sha="head",
         wheel=dict(tree="tree", commit="tested"),
@@ -49,8 +47,8 @@ def test_baseline_uses_main_order_and_excludes_candidate(manifest):
     older = dict(manifest, record_id="90-1", run_id=90, baseline_sha="older")
     newer = dict(manifest, record_id="80-1", run_id=80, baseline_sha="newer")
     candidate = dict(manifest, baseline_sha="candidate")
-    wrong_environment = dict(newer, compatibility_key="other", baseline_sha="tip")
-    records = [older, candidate, newer, wrong_environment]
+    other_genesis = dict(newer, genesis_sha="other", baseline_sha="tip")
+    records = [older, candidate, newer, other_genesis]
     history = ["tip", "candidate", "newer", "older"]
     assert benchmarks.select_baseline(manifest, records, history, "candidate") == newer
     assert benchmarks.select_baseline(manifest, [candidate], history, "candidate") is None
@@ -72,7 +70,7 @@ def test_comparison_exports_baseline_and_provenance(manifest, tmp_path):
         outputs = (tmp_path / "outputs").read_text()
         assert "wandb_filters<<" in outputs
         assert '"config.publication": "chosen"' in outputs
-        assert '"config.compatibility_key": "environment"' in outputs
+        assert '"config.genesis_sha": "genesis"' in outputs
         summary = (tmp_path / "summary").read_text()
         assert "Genesis: `v1.0` (`genesis`)" in summary
         assert "Quadrants candidate: `tested`" in summary
@@ -225,7 +223,6 @@ def test_prepare_retry_keeps_original_configuration(manifest, tmp_path):
     manifest = dict(
         manifest,
         genesis_sha="original",
-        image_version="1_25",
         wheel=dict(run_id=20, artifact_id=30),
     )
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
@@ -259,7 +256,7 @@ def test_comparison_retry_reuses_complete_published_attempt(manifest, tmp_path):
         assert json.loads((tmp_path / "manifest.json").read_text()) == published
 
 
-def test_complete_modes_produce_a_bootstrap_key(manifest, tmp_path):
+def test_complete_modes_preserve_the_selected_genesis_revision(manifest, tmp_path):
     jobs = [
         dict(name=f"production-benchmarks-{label}", conclusion="success", started_at="now")
         for label in ("field", "ndarray")
@@ -274,10 +271,7 @@ def test_complete_modes_produce_a_bootstrap_key(manifest, tmp_path):
     with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
         result = benchmarks.collect_results(tmp_path, dict(manifest, bootstrap=True))
         assert result["baseline_sha"] == "tested"
-        assert len(result["compatibility_key"]) == 64
-    with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
-        changed = benchmarks.collect_results(tmp_path, dict(manifest, image_version="1_26"))
-        assert changed["compatibility_key"] != result["compatibility_key"]
+        assert result["genesis_sha"] == manifest["genesis_sha"]
 
 
 @pytest.mark.parametrize("synthetic_merge", [True, False])
@@ -327,7 +321,7 @@ def test_prepare_anchors_cutoff_to_tested_wheel_base(manifest, tmp_path, synthet
     assert saved["wheel"]["commit"] == commit
 
 
-def test_bootstrap_uses_image_from_resolved_genesis_revision(tmp_path):
+def test_bootstrap_resolves_the_requested_genesis_revision(tmp_path):
     wheel_run = dict(head_branch="main", event="push", conclusion="success", head_sha="main")
     wheel = dict(commit="main", artifact_id=30, run_id=20, base_commit=None)
 
@@ -336,8 +330,7 @@ def test_bootstrap_uses_image_from_resolved_genesis_revision(tmp_path):
             return dict(sha="main")
         if endpoint.endswith("/commits/release"):
             return dict(sha="selected-genesis")
-        assert endpoint.endswith("/contents/.github/genesis_image_ver?ref=selected-genesis")
-        return dict(content=base64.b64encode(b"selected-image\n").decode())
+        raise AssertionError(f"Unexpected GitHub request: {endpoint}")
 
     with (
         patch.object(benchmarks, "pages", side_effect=[iter([]), iter([wheel_run])]),
@@ -348,4 +341,3 @@ def test_bootstrap_uses_image_from_resolved_genesis_revision(tmp_path):
         benchmarks.prepare(tmp_path, dict(inputs=dict(genesis_ref="release")), 100, 1)
     saved = json.loads((tmp_path / "manifest.json").read_text())
     assert saved["genesis_sha"] == "selected-genesis"
-    assert saved["image_version"] == "selected-image"
