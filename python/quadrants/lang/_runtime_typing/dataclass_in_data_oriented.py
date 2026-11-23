@@ -93,8 +93,6 @@ def reject_undiscovered_dataclass_member(
 
     This can reject dataclasses reached through:
     - Properties or other descriptors, including properties returning an already-discovered dataclass.
-    - Attributes added after discovery, such as obj.extra = State(3).
-    - Attributes changed from a scalar to a dataclass after discovery.
     - Class-level attributes on data-oriented classes; discovery walks instance attributes.
     - Dynamic attributes supplied by __getattr__.
     - Attributes on a dataclass that are not declared dataclass fields.
