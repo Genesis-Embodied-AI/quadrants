@@ -78,10 +78,10 @@ def collect_dataclass_schemas_in_data_oriented_args(
 
         data_oriented_obj = py_arg
         for path in _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj):
-            child = get_member_at_path(data_oriented_obj, path)
-            if not hasattr(type(child), "__dataclass_fields__"):
+            outermost_dataclass = get_member_at_path(data_oriented_obj, path)
+            if not hasattr(type(outermost_dataclass), "__dataclass_fields__"):
                 raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-            schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
+            schema = cached_infer_dataclass_type(outermost_dataclass, ".".join((arg_metas[index].name, *path)))
             launch_arg_schemas.append((index, path, schema))
     return launch_arg_schemas
 
