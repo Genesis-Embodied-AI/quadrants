@@ -10,7 +10,7 @@ from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import (
-    DataOrientedInstance,
+    DataOriented,
     get_member_at_path,
     is_data_oriented,
     is_dataclass_instance,
@@ -21,7 +21,7 @@ _dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, .
 
 
 def _collect_dataclass_paths_in_data_oriented(
-    data_oriented_obj: DataOrientedInstance,
+    data_oriented_obj: DataOriented,
     path: tuple[str, ...],
     dataclass_paths: list[tuple[str, ...]],
     active_ids: set[int],
@@ -46,9 +46,7 @@ def _collect_dataclass_paths_in_data_oriented(
         active_ids.remove(id(data_oriented_obj))
 
 
-def _cached_collect_dataclass_paths_in_data_oriented(
-    data_oriented_obj: DataOrientedInstance,
-) -> tuple[tuple[str, ...], ...]:
+def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: DataOriented) -> tuple[tuple[str, ...], ...]:
     """Find outermost dataclass members."""
     cached = _dataclass_paths_by_data_oriented_instance.get(data_oriented_obj)
     if cached is not None:

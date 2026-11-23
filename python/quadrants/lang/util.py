@@ -333,13 +333,13 @@ def get_traceback(stacklevel=1):
     return "".join(traceback.format_list(s))
 
 
-class DataOrientedInstance(Protocol):
+class DataOriented(Protocol):
     """An instance whose class carries the data-oriented marker."""
 
     _data_oriented: ClassVar[bool]
 
 
-def is_data_oriented(obj: object) -> TypeGuard[DataOrientedInstance]:
+def is_data_oriented(obj: object) -> TypeGuard[DataOriented]:
     """Check whether the object's class inherits the data-oriented marker.
 
     Class dictionaries bypass metaclass attribute hooks, which can recurse indefinitely on Genesis's Pydantic objects.
