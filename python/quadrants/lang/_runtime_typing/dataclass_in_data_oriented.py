@@ -20,34 +20,29 @@ _dataclass_paths_by_data_oriented_instance: WeakIdentityCache[tuple[tuple[str, .
 
 
 def _collect_dataclass_paths_in_data_oriented(
-    py_obj: Any,
+    data_oriented_obj: Any,
     path: tuple[str, ...],
     dataclass_paths: list[tuple[str, ...]],
     active_ids: set[int],
 ) -> None:
-    """From a data-oriented root, walk only data-oriented objects and append dataclass paths to dataclass_paths.
-
-    Stop each branch at a dataclass (recording its path), any other non-data-oriented object, or an active cycle.
-    """
-    if is_dataclass_instance(py_obj):
-        dataclass_paths.append(path)
+    """Record dataclass children of a data-oriented object; recurse only into data-oriented children."""
+    if id(data_oriented_obj) in active_ids:
         return
 
-    if not is_data_oriented(py_obj):
-        return
-
-    if id(py_obj) in active_ids:
-        return
-
-    active_ids.add(id(py_obj))
+    active_ids.add(id(data_oriented_obj))
     try:
-        asdict = getattr(py_obj, "_asdict", None) if isinstance(py_obj, tuple) else None
-        members = asdict() if asdict is not None else vars(py_obj)
+        asdict = getattr(data_oriented_obj, "_asdict", None) if isinstance(data_oriented_obj, tuple) else None
+        members = asdict() if asdict is not None else vars(data_oriented_obj)
         for name, child in members.items():
-            if not name.startswith("_qd_"):
+            if name.startswith("_qd_"):
+                continue
+
+            if is_dataclass_instance(child):
+                dataclass_paths.append((*path, name))
+            elif is_data_oriented(child):
                 _collect_dataclass_paths_in_data_oriented(child, (*path, name), dataclass_paths, active_ids)
     finally:
-        active_ids.remove(id(py_obj))
+        active_ids.remove(id(data_oriented_obj))
 
 
 def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: Any) -> tuple[tuple[str, ...], ...]:
