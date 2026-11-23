@@ -26,7 +26,7 @@ These algorithms run on all of Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Me
 
 ## Composable `@qd.func` ops
 
-Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. The function is annotated with `requires_top_level=True`, so attempting to use it outside of top level will throw an exception at compile time. Note that within a `qd.loop_do_while` counts as being at top-level [FIXME: add qd.checkpoint here too, once/when we merge qd.checkpoint].
+Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. The function is annotated with `requires_top_level=True`, so attempting to use it outside of top level will throw an exception at compile time. Note that within a `qd.loop_do_while` or `qd.checkpoint` counts as being at top-level.
 
 ## Key sizing parameters
 
