@@ -780,32 +780,32 @@ my_struct.b[37] 5
 </div>
 <section id="dataclasses-stored-on-data-oriented-objects">
 <h4>Dataclasses stored on data-oriented objects<a class="headerlink" href="#dataclasses-stored-on-data-oriented-objects" title="Link to this heading">#</a></h4>
-<p>Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their arriving values determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of <code class="docutils literal notranslate"><span class="pre">template_primitives</span></code> on the owner. Use <code class="docutils literal notranslate"><span class="pre">Final</span></code> for dataclass fields needed in <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code>.</p>
+<p>Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their arriving values determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of <code class="docutils literal notranslate"><span class="pre">template_primitives</span></code> on the data-oriented object. Use <code class="docutils literal notranslate"><span class="pre">Final</span></code> for dataclass fields needed in <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="p">:</span>
     <span class="n">count</span><span class="p">:</span> <span class="nb">int</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">Owner</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">DataOriented</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">State</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="n">owner</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">owner</span><span class="o">.</span><span class="n">alias</span><span class="o">.</span><span class="n">count</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="n">data_oriented_obj</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">data_oriented_obj</span><span class="o">.</span><span class="n">alias</span><span class="o">.</span><span class="n">count</span>
 
-<span class="n">owner</span> <span class="o">=</span> <span class="n">Owner</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">owner</span><span class="p">))</span>  <span class="c1"># 3</span>
-<span class="n">owner</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">count</span> <span class="o">=</span> <span class="mi">7</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">owner</span><span class="p">))</span>  <span class="c1"># 7, using the same compiled kernel</span>
+<span class="n">data_oriented_obj</span> <span class="o">=</span> <span class="n">DataOriented</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">data_oriented_obj</span><span class="p">))</span>  <span class="c1"># 3</span>
+<span class="n">data_oriented_obj</span><span class="o">.</span><span class="n">state</span><span class="o">.</span><span class="n">count</span> <span class="o">=</span> <span class="mi">7</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">read</span><span class="p">(</span><span class="n">data_oriented_obj</span><span class="p">))</span>  <span class="c1"># 7, using the same compiled kernel</span>
 </pre></div>
 </div>
 <p>Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.</p>
 </section>
 <section id="runtime-primitives-template-primitives-false">
 <span id="runtime-primitives-template_primitivesfalse"></span><h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
-<p>Access dataclasses inside data-oriented arguments through stored attributes, such as <code class="docutils literal notranslate"><span class="pre">owner.state</span></code>, rather than through properties, method calls, or indexing.</p>
+<p>Access dataclasses inside data-oriented arguments through stored attributes, such as <code class="docutils literal notranslate"><span class="pre">data_oriented_obj.state</span></code>, rather than through properties, method calls, or indexing.</p>
 <p><code class="docutils literal notranslate"><span class="pre">template_primitives</span></code> controls scalar attributes of data-oriented objects. Dataclass fields follow the same rules as dataclasses passed directly to a kernel.</p>
 <p>If you want to change a primitive member’s value <strong>from Python between launches without triggering a recompile</strong>, decorate the data_oriented class with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>. The member stays read-only inside the kernel.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">template_primitives</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
