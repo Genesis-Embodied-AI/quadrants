@@ -163,7 +163,6 @@ def prepare(directory, event, run_id, attempt):
                 bootstrap=True,
                 image_version=base64.b64decode(image["content"]).decode().strip(),
                 activation=str(run_id),
-                constraints="",
             )
         manifest["wheel"] = validate_wheel(wheel_run, directory / "wheel")
         manifest["head_sha"] = wheel_run["head_sha"]
@@ -186,7 +185,6 @@ def prepare(directory, event, run_id, attempt):
         image_version=manifest["image_version"],
         wheel_run=manifest["wheel"]["run_id"],
         wheel_artifact=manifest["wheel"]["artifact_id"],
-        constraints=manifest["constraints"],
         snapshot_exists=str(bool(artifacts and any(a["name"] == "benchmark-input" for a in artifacts))).lower(),
     )
     with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
@@ -195,7 +193,7 @@ def prepare(directory, event, run_id, attempt):
             stream.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
 
 
-# Validate both benchmark modes and their environment, or return None when this attempt only retries comparison.
+# Validate both benchmark modes, or return None when this attempt only retries comparison.
 def collect_results(directory, manifest):
     run_id = manifest["run_id"]
     jobs = list(pages(f"repos/{REPOSITORY}/actions/runs/{run_id}/attempts/{manifest['attempt']}/jobs", "jobs"))
@@ -205,18 +203,9 @@ def collect_results(directory, manifest):
         matches = [job for job in jobs if job["name"].endswith(f"production-benchmarks-{label}")]
         if len(matches) != 1 or matches[0]["conclusion"] != "success":
             raise ValueError(f"Both benchmark modes must succeed in attempt {manifest['attempt']}.")
-        for name in (f"speed-test-{mode}", f"mem-test-{mode}", f"benchmark-environment-{mode}"):
+        for name in (f"speed-test-{mode}", f"mem-test-{mode}"):
             artifact_files(run_id, name, directory / name, started_after=matches[0]["started_at"])
-    environments = [
-        json.loads(next((directory / f"benchmark-environment-{mode}").glob("*.json")).read_text())
-        for mode in ("0", "1")
-    ]
-    if environments[0] != environments[1]:
-        raise ValueError("Field and ndarray environments differ.")
-    environment = environments[0]
-    key = hashlib.sha256(json.dumps([manifest["genesis_sha"], environment], sort_keys=True).encode()).hexdigest()
-    if not manifest["bootstrap"] and key != manifest["compatibility_key"]:
-        raise ValueError("Benchmark environment changed. Run manual bootstrap before activating it.")
+    key = hashlib.sha256(json.dumps([manifest["genesis_sha"], manifest["image_version"]]).encode()).hexdigest()
     for kind, metrics in (("speed", ("runtime_fps", "compile_time")), ("mem", ("max_mem_mb",))):
         for mode in ("0", "1"):
             files = list((directory / f"{kind}-test-{mode}").glob(f"{kind}_test*.txt"))
@@ -235,8 +224,6 @@ def collect_results(directory, manifest):
                     raise ValueError("Benchmark measurements must be positive and finite.")
     manifest.update(
         compatibility_key=key,
-        environment=environment,
-        constraints="\n".join(environment["packages"]),
         baseline_sha=None,
     )
     if manifest["bootstrap"]:
@@ -421,7 +408,7 @@ def prepare_comparison(manifest):
     context = (
         f"Genesis: `{manifest['genesis_ref']}` (`{manifest['genesis_sha']}`)\n\n"
         f"Quadrants candidate: `{manifest['wheel']['commit']}`\n\n"
-        f"Environment: `{manifest['compatibility_key']}`\n\n"
+        f"Container image: `{manifest['image_version']}`\n\n"
         f"Quadrants baseline: `{baseline['baseline_sha']}`\n\n"
         f"Main cutoff: `{manifest['main_cutoff']}`\n\n"
         f"[Baseline run](https://github.com/{REPOSITORY}/actions/runs/{baseline['run_id']})"

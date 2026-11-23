@@ -35,6 +35,7 @@ def manifest():
         activation="100",
         pr=12,
         genesis_sha="genesis",
+        image_version="1_25",
         compatibility_key="environment",
         bootstrap=False,
         head_sha="head",
@@ -225,7 +226,6 @@ def test_prepare_retry_keeps_original_configuration(manifest, tmp_path):
         manifest,
         genesis_sha="original",
         image_version="1_25",
-        constraints="numpy==2.0",
         wheel=dict(run_id=20, artifact_id=30),
     )
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
@@ -265,23 +265,19 @@ def test_complete_modes_produce_a_bootstrap_key(manifest, tmp_path):
         for label in ("field", "ndarray")
     ]
     for mode in ("0", "1"):
-        for name in ("speed-test", "mem-test", "benchmark-environment"):
+        for name in ("speed-test", "mem-test"):
             (tmp_path / f"{name}-{mode}").mkdir()
         (tmp_path / f"speed-test-{mode}" / "speed_test.txt").write_text(
             f"env=anymal | dtype={mode} | runtime_fps=100 | compile_time=10 | realtime_factor=1\n"
         )
         (tmp_path / f"mem-test-{mode}" / "mem_test.txt").write_text(f"env=anymal | dtype={mode} | max_mem_mb=100\n")
-        (tmp_path / f"benchmark-environment-{mode}" / "environment.json").write_text(
-            json.dumps(dict(packages=["numpy==2.0"], image_version="1_25"))
-        )
     with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
         result = benchmarks.collect_results(tmp_path, dict(manifest, bootstrap=True))
         assert result["baseline_sha"] == "tested"
-        assert result["constraints"] == "numpy==2.0"
         assert len(result["compatibility_key"]) == 64
     with patch.object(benchmarks, "pages", return_value=iter(jobs)), patch.object(benchmarks, "artifact_files"):
-        with pytest.raises(ValueError, match="environment changed"):
-            benchmarks.collect_results(tmp_path, manifest)
+        changed = benchmarks.collect_results(tmp_path, dict(manifest, image_version="1_26"))
+        assert changed["compatibility_key"] != result["compatibility_key"]
 
 
 @pytest.mark.parametrize("synthetic_merge", [True, False])
@@ -301,7 +297,7 @@ def test_prepare_anchors_cutoff_to_tested_wheel_base(manifest, tmp_path, synthet
     metadata = dict(
         commit=commit, tree="tree", run_id=20, attempt=1, wheel="wheel.whl", sha256=hashlib.sha256(b"wheel").hexdigest()
     )
-    active = dict(manifest, image_version="1_25", constraints="numpy==2.0")
+    active = dict(manifest)
 
     def download(run_id, name, directory):
         directory.mkdir(parents=True)
