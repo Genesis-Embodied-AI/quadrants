@@ -10,55 +10,33 @@
 
 namespace quadrants::lang {
 
-// Replace uses and clear their visited IDs so CSE rechecks changed operands next round. Like replace_all_usages_with,
-// scan the parent subtree and ancestor blocks' top-level statements; SSA dominance keeps users within this scope.
-class ReplaceAndMarkUndone : public BasicStmtVisitor {
+// Records users from statement operands, including the operands of container statements.
+class CollectUsers : public BasicStmtVisitor {
  private:
-  std::unordered_set<int> *const visited_;
-  Stmt *const old_stmt_;
-  Stmt *const new_stmt_;
+  std::unordered_map<Stmt *, std::vector<Stmt *>> *const users_;
 
-  void mark_and_replace(Stmt *stmt) {
-    if (stmt->has_operand(old_stmt_)) {
-      visited_->erase(stmt->instance_id);
-      stmt->replace_operand_with(old_stmt_, new_stmt_);
+  void collect_users(Stmt *stmt) {
+    for (auto *op : stmt->get_operands()) {
+      if (op != nullptr) {
+        (*users_)[op].push_back(stmt);
+      }
     }
   }
 
  public:
   using BasicStmtVisitor::visit;
 
-  ReplaceAndMarkUndone(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt)
-      : visited_(visited), old_stmt_(old_stmt), new_stmt_(new_stmt) {
+  explicit CollectUsers(std::unordered_map<Stmt *, std::vector<Stmt *>> *users) : users_(users) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
 
   void visit(Stmt *stmt) override {
-    mark_and_replace(stmt);
+    collect_users(stmt);
   }
 
   void preprocess_container_stmt(Stmt *stmt) override {
-    mark_and_replace(stmt);
-  }
-
-  static void run(std::unordered_set<int> *visited, Stmt *old_stmt, Stmt *new_stmt) {
-    ReplaceAndMarkUndone walker(visited, old_stmt, new_stmt);
-    if (old_stmt->parent == nullptr) {
-      old_stmt->get_ir_root()->accept(&walker);
-      return;
-    }
-    old_stmt->parent->accept(&walker);
-    auto current_block = old_stmt->parent->parent_block();
-    while (current_block != nullptr) {
-      for (auto &stmt : current_block->statements) {
-        if (stmt->has_operand(old_stmt)) {
-          visited->erase(stmt->instance_id);
-          stmt->replace_operand_with(old_stmt, new_stmt);
-        }
-      }
-      current_block = current_block->parent_block();
-    }
+    collect_users(stmt);
   }
 };
 
@@ -71,6 +49,18 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::unordered_map<std::size_t, std::vector<Stmt *>> visible_stmts_;
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
+
+  // Root of the IR tree being optimized, saved at round start so CollectUsers can traverse the whole tree.
+  IRNode *root_ = nullptr;
+  // Indexes users under `root_` to avoid a tree walk per replacement. Built before the first elimination or hoist.
+  // Updated as operands change; queued insertions and erased statements stay alive until the round ends.
+  std::unordered_map<Stmt *, std::vector<Stmt *>> users_;
+  bool users_built_ = false;
+
+  // Statements eliminated in the current round. Erased together at the end of the round, one pass per block: the
+  // per-statement DelayedIRModifier::erase does a linear find + vector erase each, quadratic in the block size when
+  // many root-block statements are eliminated.
+  std::vector<Stmt *> to_erase_;
 
   // Limit pre-offload CSE to address computations and eligible integer expressions; defer other work to per-task CSE.
   bool ptrs_only_ = false;
@@ -155,6 +145,53 @@ class WholeKernelCSE : public BasicStmtVisitor {
     return irpass::analysis::same_statements(this_stmt, prev_stmt);
   }
 
+  void begin_round(IRNode *root) {
+    root_ = root;
+    users_.clear();
+    users_built_ = false;
+  }
+
+  void replace_uses_and_mark_users_dirty(Stmt *duplicate_stmt, Stmt *replacement_stmt) {
+    // Build before extracting hoisted statements so their operands remain indexed while insertion is pending.
+    if (!users_built_) {
+      CollectUsers collect(&users_);
+      root_->accept(&collect);
+      users_built_ = true;
+    }
+    auto it = users_.find(duplicate_stmt);
+    if (it == users_.end()) {
+      return;
+    }
+    std::vector<Stmt *> duplicate_stmt_users = std::move(it->second);
+    users_.erase(it);
+    auto &replacement_stmt_users = users_[replacement_stmt];
+    for (auto *user : duplicate_stmt_users) {
+      // Erased users remain alive in their block, but no longer need updating. Repeated operands can repeat users.
+      if (!user->erased && user->has_operand(duplicate_stmt)) {
+        // Mark the user dirty: remove its ID from the already-checked set so CSE can check its changed operands again.
+        visited_.erase(user->instance_id);
+        user->replace_operand_with(duplicate_stmt, replacement_stmt);
+        replacement_stmt_users.push_back(user);
+      }
+    }
+  }
+
+  bool erase_eliminated() {
+    if (to_erase_.empty()) {
+      return false;
+    }
+    // Group statements selected for removal by their parent block.
+    std::unordered_map<Block *, std::unordered_set<Stmt *>> by_block;
+    for (auto *stmt : to_erase_) {
+      by_block[stmt->parent].insert(stmt);
+    }
+    for (auto &[block, stmts] : by_block) {
+      block->erase(std::move(stmts));
+    }
+    to_erase_.clear();
+    return true;
+  }
+
   void register_visible(std::size_t hash_value, Stmt *stmt) {
     visible_stmts_[hash_value].push_back(stmt);
     scope_inserts_.back().emplace_back(hash_value, stmt);
@@ -179,8 +216,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
     if (it != visible_stmts_.end()) {
       for (auto *prev_stmt : it->second) {
         if (common_statement_eliminable(stmt, prev_stmt)) {
-          ReplaceAndMarkUndone::run(&visited_, stmt, prev_stmt);
-          modifier_.erase(stmt);
+          replace_uses_and_mark_users_dirty(stmt, prev_stmt);
+          to_erase_.push_back(stmt);
           return;
         }
       }
@@ -212,6 +249,40 @@ class WholeKernelCSE : public BasicStmtVisitor {
     scope_inserts_.pop_back();
   }
 
+  void hoist_matching_branch_statement(IfStmt *if_stmt, bool from_front) {
+    auto &true_clause = if_stmt->true_statements;
+    auto &false_clause = if_stmt->false_statements;
+    if (true_clause->statements.empty() || false_clause->statements.empty()) {
+      return;
+    }
+    const int true_index = from_front ? 0 : (int)true_clause->size() - 1;
+    const int false_index = from_front ? 0 : (int)false_clause->size() - 1;
+    auto *true_stmt = true_clause->statements[true_index].get();
+    auto *false_stmt = false_clause->statements[false_index].get();
+    if (!irpass::analysis::same_statements(true_stmt, false_stmt)) {
+      return;
+    }
+
+    // Keep the true-branch copy and discard the false-branch copy. Redirect the false copy's users before removal,
+    // updating the use index and marking those users dirty for another CSE check.
+    replace_uses_and_mark_users_dirty(false_stmt, true_stmt);
+    auto common_stmt = true_clause->extract(true_index);
+    if (from_front) {
+      modifier_.insert_before(if_stmt, std::move(common_stmt));
+    } else {
+      modifier_.insert_after(if_stmt, std::move(common_stmt));
+    }
+    false_clause->erase(false_index);
+  }
+
+  void hoist_common_branch_statements(IfStmt *if_stmt) {
+    // Skip in pointers-only mode to avoid relocating other computation.
+    if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
+      hoist_matching_branch_statement(if_stmt, /*from_front=*/true);
+      hoist_matching_branch_statement(if_stmt, /*from_front=*/false);
+    }
+  }
+
   void visit(IfStmt *if_stmt) override {
     if (if_stmt->true_statements) {
       if (if_stmt->true_statements->statements.empty()) {
@@ -225,27 +296,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
       }
     }
 
-    // Hoist matching branch prefixes and suffixes. Skip in pointers-only mode to avoid relocating other computation.
-    if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
-      auto &true_clause = if_stmt->true_statements;
-      auto &false_clause = if_stmt->false_statements;
-      if (irpass::analysis::same_statements(true_clause->statements[0].get(), false_clause->statements[0].get())) {
-        // These branch edits do not invalidate the enclosing traversal.
-        auto common_stmt = true_clause->extract(0);
-        irpass::replace_all_usages_with(false_clause.get(), false_clause->statements[0].get(), common_stmt.get());
-        modifier_.insert_before(if_stmt, std::move(common_stmt));
-        false_clause->erase(0);
-      }
-      if (!true_clause->statements.empty() && !false_clause->statements.empty() &&
-          irpass::analysis::same_statements(true_clause->statements.back().get(),
-                                            false_clause->statements.back().get())) {
-        // These branch edits do not invalidate the enclosing traversal.
-        auto common_stmt = true_clause->extract((int)true_clause->size() - 1);
-        irpass::replace_all_usages_with(false_clause.get(), false_clause->statements.back().get(), common_stmt.get());
-        modifier_.insert_after(if_stmt, std::move(common_stmt));
-        false_clause->erase((int)false_clause->size() - 1);
-      }
-    }
+    hoist_common_branch_statements(if_stmt);
 
     if (if_stmt->true_statements)
       if_stmt->true_statements->accept(this);
@@ -257,8 +308,11 @@ class WholeKernelCSE : public BasicStmtVisitor {
     WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
     while (true) {
+      eliminator.begin_round(node);
       node->accept(&eliminator);
-      if (eliminator.modifier_.modify_ir())
+      bool round_modified = eliminator.modifier_.modify_ir();
+      round_modified |= eliminator.erase_eliminated();
+      if (round_modified)
         modified = true;
       else
         break;

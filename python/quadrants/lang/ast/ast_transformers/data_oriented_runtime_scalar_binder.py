@@ -1,17 +1,6 @@
 # type: ignore
-"""Lift primitive members of ``@qd.data_oriented(template_primitives=False)`` template args into runtime scalar kernel
-args at AST-build time.
+"""Discover dataclass roots and bind opted-in data-oriented runtime scalars."""
 
-Lives alongside ``ndarray_arg_resolver.py`` / ``checkpoint_transformer.py`` so the central
-``function_def_transformer.py`` file doesn't have to grow per-feature (the same rationale the ndarray resolver
-documents). ``FunctionDefTransformer.transform`` delegates here right after ``_predeclare_struct_ndarrays``; this is the
-only entry point.
-
-See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: ``template_primitives=False``") for the
-user-facing surface.
-"""
-
-import dataclasses
 from typing import Any, NamedTuple
 
 from quadrants._lib import core as _qd_core
@@ -42,49 +31,59 @@ class _ScalarMember(NamedTuple):
     attr_chain: tuple[str, ...]
 
 
-def _collect_scalars_in_single_data_oriented(
+def _collect_runtime_members_in_data_oriented(
     py_obj: Any,
     arg_idx: int,
     path: tuple[str, ...],
     seen_ids: set[int],
     scalar_members: list[_ScalarMember],
+    data_oriented_template_primitives: bool,
+    dataclass_members: list[tuple[int, tuple[str, ...], Any]],
 ) -> None:
-    """Walk stored attributes of data-oriented objects and dataclasses, collecting exact Python bool, int, and float
-    values.
-
-    Append each scalar and its attribute route to scalar_members, including scalars the kernel does not use. Pruning
-    later selects the kernel parameters. Stop at previously visited objects and do not descend into lists, tuples, or
-    dicts.
-    """
+    """Walk stored data-oriented attributes, collecting runtime scalars and stopping at dataclass roots."""
     obj_id = id(py_obj)
     if obj_id in seen_ids:
         return
 
     seen_ids.add(obj_id)
-    if is_dataclass_instance(py_obj):
-        items = [(field.name, getattr(py_obj, field.name)) for field in dataclasses.fields(py_obj)]
+    if hasattr(py_obj, "_asdict"):
+        items = py_obj._asdict().items()
     elif hasattr(py_obj, "__dict__"):
-        items = list(vars(py_obj).items())
+        items = vars(py_obj).items()
     else:
         return
 
     for attr_name, attr_val in items:
+        if attr_name.startswith("_qd_"):
+            continue
         if isinstance(attr_val, _TensorClass):
             attr_val = attr_val._unwrap()
         attr_type = type(attr_val)
-        # Only exact Python primitives become runtime parameters; NumPy scalars and subclasses retain their
+        # Only exact plain Python primitives become runtime parameters; NumPy scalars and subclasses retain their
         # compile-time behavior.
-        if attr_type is bool or attr_type is int or attr_type is float:
+        if not data_oriented_template_primitives and attr_type in (bool, int, float):
             scalar_members.append(_ScalarMember(py_obj, attr_name, attr_val, arg_idx, (*path, attr_name)))
-        elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
-            _collect_scalars_in_single_data_oriented(attr_val, arg_idx, (*path, attr_name), seen_ids, scalar_members)
+        elif is_dataclass_instance(attr_val):
+            if id(attr_val) not in seen_ids:
+                seen_ids.add(id(attr_val))
+                dataclass_members.append((arg_idx, (*path, attr_name), attr_val))
+        elif is_data_oriented(attr_val):
+            _collect_runtime_members_in_data_oriented(
+                attr_val,
+                arg_idx,
+                (*path, attr_name),
+                seen_ids,
+                scalar_members,
+                data_oriented_template_primitives,
+                dataclass_members,
+            )
 
 
-def _collect_runtime_scalars_from_data_oriented_args(
+def collect_runtime_members_from_data_oriented_args(
     py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]
-) -> list[_ScalarMember]:
-    """Collect scalars beneath data-oriented kernel arguments with template_primitives=False."""
-    flagged: list[tuple[int, Any]] = []
+) -> tuple[list[_ScalarMember], list[tuple[int, tuple[str, ...], Any]]]:
+    """Return runtime scalars and dataclass roots found beneath data-oriented arguments."""
+    owners: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(arg_metas):
         anno = arg_meta.annotation
         is_template = anno is annotations.template or isinstance(anno, annotations.template)
@@ -94,16 +93,19 @@ def _collect_runtime_scalars_from_data_oriented_args(
         val = py_args[i]
         if isinstance(val, _TensorClass):
             val = val._unwrap()
-        if not uses_template_primitives(val):
-            flagged.append((i, val))
+        if is_data_oriented(val):
+            owners.append((i, val))
 
     scalar_members: list[_ScalarMember] = []
-    for arg_idx, val in flagged:
-        _collect_scalars_in_single_data_oriented(val, arg_idx, (), set(), scalar_members)
-    return scalar_members
+    dataclass_members: list[tuple[int, tuple[str, ...], Any]] = []
+    for arg_idx, val in owners:
+        _collect_runtime_members_in_data_oriented(
+            val, arg_idx, (), set(), scalar_members, uses_template_primitives(val), dataclass_members
+        )
+    return scalar_members, dataclass_members
 
 
-def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_members: list[_ScalarMember]) -> None:
+def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext, scalar_members: list[_ScalarMember]) -> None:
     """Record scalar members and create kernel parameters for those used by the compiled kernel.
 
     During discovery, record each member's location and scalar kind so accesses can be marked as used.
@@ -152,11 +154,3 @@ def _create_runtime_scalar_bindings(func_ctx: FuncCompilePassContext, scalar_mem
         )
         bindings[key] = MemberBinding(flat_name, dtype, value_expr, reject_in_static_scope=True)
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
-
-
-def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext) -> None:
-    """Find opted-in scalar members, then create their compiler bindings."""
-    assert func_ctx.py_args is not None
-    scalar_members = _collect_runtime_scalars_from_data_oriented_args(func_ctx.py_args, func_ctx.func.arg_metas)
-    if scalar_members:
-        _create_runtime_scalar_bindings(func_ctx, scalar_members)
