@@ -14,8 +14,9 @@ from tests.helpers import test_utils
 def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
     """Reject access to a data-oriented object stored inside a dataclass, from either a kernel or qd.func.
 
-    owner.state is allowed: a dataclass inside a data-oriented object. Accessing owner.state.inner is forbidden: inner
-    is data-oriented inside a dataclass, a nesting that can cause incorrect cached-kernel reuse.
+    data_oriented_obj.state is allowed: a dataclass inside a data-oriented object. Accessing
+    data_oriented_obj.state.inner is forbidden: inner is data-oriented inside a dataclass, a nesting that can cause
+    incorrect cached-kernel reuse.
     """
 
     @qd.data_oriented
@@ -28,7 +29,7 @@ def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
         inner: qd.Template
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, state: State) -> None:
             self.state = state
 
@@ -37,14 +38,14 @@ def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
         return qd.static(state.inner.count)
 
     @qd.kernel(fastcache=True)
-    def read(owner: qd.Template, use_func: qd.Template) -> qd.i32:
+    def read(data_oriented_obj: qd.Template, use_func: qd.Template) -> qd.i32:
         if qd.static(use_func):
-            return read_member(owner.state)
+            return read_member(data_oriented_obj.state)
         else:
-            return qd.static(owner.state.inner.count)
+            return qd.static(data_oriented_obj.state.inner.count)
 
     with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
-        read(Owner(State(Inner())), via_func)
+        read(DataOriented(State(Inner())), via_func)
 
 
 @test_utils.test(arch=qd.cpu)

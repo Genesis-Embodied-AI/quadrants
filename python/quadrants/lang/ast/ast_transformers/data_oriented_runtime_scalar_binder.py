@@ -85,7 +85,7 @@ def collect_runtime_members_from_data_oriented_args(
     py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]
 ) -> tuple[list[_ScalarMember], list[tuple[int, tuple[str, ...], Any]]]:
     """Return runtime scalars and dataclass roots found beneath data-oriented arguments."""
-    owners: list[tuple[int, Any]] = []
+    data_oriented_args: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(arg_metas):
         anno = arg_meta.annotation
         is_template = anno is annotations.template or isinstance(anno, annotations.template)
@@ -96,11 +96,11 @@ def collect_runtime_members_from_data_oriented_args(
         if isinstance(val, _TensorClass):
             val = val._unwrap()
         if is_data_oriented(val):
-            owners.append((i, val))
+            data_oriented_args.append((i, val))
 
     scalar_members: list[_ScalarMember] = []
     dataclass_members: list[tuple[int, tuple[str, ...], Any]] = []
-    for arg_idx, val in owners:
+    for arg_idx, val in data_oriented_args:
         _collect_runtime_members_in_data_oriented(
             val, arg_idx, (), set(), scalar_members, uses_template_primitives(val), dataclass_members
         )

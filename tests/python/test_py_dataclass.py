@@ -1946,7 +1946,7 @@ def test_container_weakref_warning(nested: bool, expected_warnings: int, monkeyp
         n: int
 
     @dataclass
-    class Owner:
+    class DataOriented:
         state: SlottedState
 
     @qd.kernel
@@ -1954,11 +1954,11 @@ def test_container_weakref_warning(nested: bool, expected_warnings: int, monkeyp
         return state.n
 
     @qd.kernel
-    def read_nested(owner: Owner) -> int:
-        return owner.state.n
+    def read_nested(data_oriented_obj: DataOriented) -> int:
+        return data_oriented_obj.state.n
 
     state = SlottedState(7)
-    kernel, arg = (read_nested, Owner(state)) if nested else (read_direct, state)
+    kernel, arg = (read_nested, DataOriented(state)) if nested else (read_direct, state)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         assert kernel(arg) == 7

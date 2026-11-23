@@ -497,7 +497,7 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
 
 @test_utils.test()
 def test_discovered_schemas_follow_argument_indices_and_member_paths() -> None:
-    """Forward each schema through owner recursion without confusing equal paths in different arguments."""
+    """Forward each schema through nested data-oriented objects without confusing equal paths in different arguments."""
     from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
         collect_dataclass_schemas_in_data_oriented_args,
     )
@@ -507,21 +507,21 @@ def test_discovered_schemas_follow_argument_indices_and_member_paths() -> None:
         value: object
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, state: object) -> None:
             self.child = state
 
-    owners = (Owner(Owner(State(3))), Owner(Owner(State(2.5))))
+    data_oriented_args = (DataOriented(DataOriented(State(3))), DataOriented(DataOriented(State(2.5))))
     metas = [ArgMetadata(qd.Template, "first"), ArgMetadata(qd.Template, "second")]
-    schemas = collect_dataclass_schemas_in_data_oriented_args(owners, metas, [0, 1])
-    assert isinstance(args_hasher.hash_args(False, owners, metas), FastcacheSkip)
-    expected = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas)
+    schemas = collect_dataclass_schemas_in_data_oriented_args(data_oriented_args, metas, [0, 1])
+    assert isinstance(args_hasher.hash_args(False, data_oriented_args, metas), FastcacheSkip)
+    expected = args_hasher.hash_args(False, data_oriented_args, metas, launch_arg_schemas=schemas)
     assert isinstance(expected, str)
-    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=schemas) == expected
+    assert args_hasher.hash_args(False, data_oriented_args, metas, launch_arg_schemas=schemas) == expected
 
-    owners[0].child.child = State(1.5)
-    replacement_schemas = collect_dataclass_schemas_in_data_oriented_args(owners, metas, [0, 1])
-    assert args_hasher.hash_args(False, owners, metas, launch_arg_schemas=replacement_schemas) != expected
+    data_oriented_args[0].child.child = State(1.5)
+    replacement_schemas = collect_dataclass_schemas_in_data_oriented_args(data_oriented_args, metas, [0, 1])
+    assert args_hasher.hash_args(False, data_oriented_args, metas, launch_arg_schemas=replacement_schemas) != expected
 
 
 @test_utils.test()
@@ -533,10 +533,12 @@ def test_dataclass_without_schema_skips_fastcache() -> None:
         value: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         @property
         def state(self) -> State:
             return State(3)
 
     assert isinstance(args_hasher.hash_args(False, [State(3)], [None]), FastcacheSkip)
-    assert isinstance(args_hasher.hash_args(False, [Owner()], [ArgMetadata(qd.Template, "owner")]), FastcacheSkip)
+    assert isinstance(
+        args_hasher.hash_args(False, [DataOriented()], [ArgMetadata(qd.Template, "data_oriented_obj")]), FastcacheSkip
+    )

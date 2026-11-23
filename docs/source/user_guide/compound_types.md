@@ -326,7 +326,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 #### Dataclasses stored on data-oriented objects
 
-Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their arriving values determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of `template_primitives` on the owner. Use `Final` for dataclass fields needed in `qd.static(...)`.
+Scalar fields of a Python dataclass stored on a data-oriented object are runtime kernel parameters, just as when passing the dataclass directly. Their arriving values determine the parameter types. Updating an ordinary scalar value between launches takes effect without recompilation. This applies regardless of `template_primitives` on the data-oriented object. Use `Final` for dataclass fields needed in `qd.static(...)`.
 
 ```python
 @dataclasses.dataclass
@@ -334,26 +334,26 @@ class State:
     count: int
 
 @qd.data_oriented
-class Owner:
+class DataOriented:
     def __init__(self):
         self.state = State(3)
         self.alias = self.state
 
 @qd.kernel
-def read(owner: qd.Template) -> qd.i32:
-    return owner.alias.count
+def read(data_oriented_obj: qd.Template) -> qd.i32:
+    return data_oriented_obj.alias.count
 
-owner = Owner()
-print(read(owner))  # 3
-owner.state.count = 7
-print(read(owner))  # 7, using the same compiled kernel
+data_oriented_obj = DataOriented()
+print(read(data_oriented_obj))  # 3
+data_oriented_obj.state.count = 7
+print(read(data_oriented_obj))  # 7, using the same compiled kernel
 ```
 
 Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.
 
 #### Runtime primitives: `template_primitives=False`
 
-Access dataclasses inside data-oriented arguments through stored attributes, such as `owner.state`, rather than through properties, method calls, or indexing.
+Access dataclasses inside data-oriented arguments through stored attributes, such as `data_oriented_obj.state`, rather than through properties, method calls, or indexing.
 
 `template_primitives` controls scalar attributes of data-oriented objects. Dataclass fields follow the same rules as dataclasses passed directly to a kernel.
 

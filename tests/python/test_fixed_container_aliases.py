@@ -17,23 +17,23 @@ def test_fixed_aliases(fastcache: bool) -> None:
         value: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, shared: bool) -> None:
             self.first = State(3)
             self.second = self.first if shared else State(7)
             self.states = ((self.second,),)
 
     @qd.kernel(fastcache=fastcache)
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.first.value + owner.second.value + owner.states[0][0].value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.first.value + data_oriented_obj.second.value + data_oriented_obj.states[0][0].value
 
-    distinct = Owner(False)
+    distinct = DataOriented(False)
     assert read(distinct) == 17
-    shared = Owner(True)
+    shared = DataOriented(True)
     assert read(shared) == 9
     shared.first.value = 5
     assert read(shared) == 15
-    fresh = Owner(True)
+    fresh = DataOriented(True)
     assert read(fresh) == 9
 
 
@@ -46,7 +46,7 @@ def test_alias_key_tracks_whole_argument_combination() -> None:
         value: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, state: State) -> None:
             self.state = state
 
@@ -54,9 +54,9 @@ def test_alias_key_tracks_whole_argument_combination() -> None:
     def read(first: qd.Template, second: qd.Template) -> qd.i32:
         return first.state.value + second.state.value
 
-    first = Owner(State(3))
-    shared = Owner(first.state)
-    independent = Owner(State(7))
+    first = DataOriented(State(3))
+    shared = DataOriented(first.state)
+    independent = DataOriented(State(7))
     assert read(first, shared) == 6
     assert read(first, independent) == 10
     first.state.value = 5

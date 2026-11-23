@@ -27,14 +27,14 @@ def test_nested_dataclass_hash_ignores_declared_child_type() -> None:
         value: Declared
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(7)
 
-    owners = (Owner(),)
-    metas = [ArgMetadata(qd.Template, "owner")]
-    launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(owners, metas, [0])
-    result = args_hasher.hash_args(False, owners, metas, launch_arg_schemas=launch_arg_schemas)
+    data_oriented_args = (DataOriented(),)
+    metas = [ArgMetadata(qd.Template, "data_oriented_obj")]
+    launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(data_oriented_args, metas, [0])
+    result = args_hasher.hash_args(False, data_oriented_args, metas, launch_arg_schemas=launch_arg_schemas)
     assert isinstance(result, str)
 
 
@@ -48,22 +48,22 @@ def test_nested_dataclass_scalar_changes_are_runtime(template_primitives: bool) 
         value: str
 
     @qd.data_oriented(template_primitives=template_primitives)
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(3)
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.f32:
-        return owner.state.value
+    def read(data_oriented_obj: qd.Template) -> qd.f32:
+        return data_oriented_obj.state.value
 
-    owner = Owner()
-    assert read(owner) == 3
+    data_oriented_obj = DataOriented()
+    assert read(data_oriented_obj) == 3
     compiled = len(read._primal.materialized_kernels)
-    owner.state.value = 8
-    assert read(owner) == 8
+    data_oriented_obj.state.value = 8
+    assert read(data_oriented_obj) == 8
     assert len(read._primal.materialized_kernels) == compiled
-    owner.state.value = 2.5
-    assert read(owner) == 2.5
+    data_oriented_obj.state.value = 2.5
+    assert read(data_oriented_obj) == 2.5
     assert len(read._primal.materialized_kernels) == compiled + 1
 
 
@@ -77,20 +77,20 @@ def test_nested_dataclass_unused_invalid_final() -> None:
         unused: Final
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(4, {1, 2})
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.state.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.state.value
 
-    assert read(Owner()) == 4
+    assert read(DataOriented()) == 4
 
 
 @test_utils.test()
 def test_nested_dataclass_final_replacement_changes_specialization() -> None:
-    """Replacing a frozen dataclass updates baked Final values inside its data-oriented owner."""
+    """Replacing a frozen dataclass updates baked Final values inside its data-oriented object."""
 
     @dataclass(frozen=True)
     class State:
@@ -98,18 +98,18 @@ def test_nested_dataclass_final_replacement_changes_specialization() -> None:
         value: str
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(2, 3)
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return qd.static(owner.state.bias) + owner.state.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return qd.static(data_oriented_obj.state.bias) + data_oriented_obj.state.value
 
-    owner = Owner()
-    assert read(owner) == 5
-    owner.state = State(7, 4)
-    assert read(owner) == 11
+    data_oriented_obj = DataOriented()
+    assert read(data_oriented_obj) == 5
+    data_oriented_obj.state = State(7, 4)
+    assert read(data_oriented_obj) == 11
 
 
 @test_utils.test()
@@ -121,16 +121,16 @@ def test_nested_dataclass_used_invalid_member_reports_path() -> None:
         value: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State({1, 2})
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return len(owner.state.value)
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return len(data_oriented_obj.state.value)
 
-    with pytest.raises(Exception, match=r"owner\.state\.value"):
-        read(Owner())
+    with pytest.raises(Exception, match=r"data_oriented_obj\.state\.value"):
+        read(DataOriented())
 
 
 @test_utils.test()
@@ -143,7 +143,7 @@ def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
         value: str
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, bias: int, value: float) -> None:
             self.state = State(bias, value)
 
@@ -152,11 +152,11 @@ def test_nested_dataclass_offline_cache(tmp_path: Path) -> None:
         qd.init(arch=arch, offline_cache=True, offline_cache_file_path=str(tmp_path))
 
         @qd.kernel(fastcache=True)
-        def run(owner: qd.Template, output: qd.types.ndarray()):
-            output[0] = qd.static(owner.state.bias) + owner.state.value
+        def run(data_oriented_obj: qd.Template, output: qd.types.ndarray()):
+            output[0] = qd.static(data_oriented_obj.state.bias) + data_oriented_obj.state.value
 
         output = qd.ndarray(qd.f32, shape=1)
-        run(Owner(bias, value), output)
+        run(DataOriented(bias, value), output)
         assert output[0] == bias + value
         if value in (4.5, 8.5) and bias == 2:
             assert run._primal.src_ll_cache_observations.cache_loaded
@@ -175,16 +175,16 @@ def test_nested_dataclass_final_keeps_mutable_ancestor_constraint() -> None:
         child: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = Parent(Child())
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.state.child.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.state.child.value
 
-    with pytest.raises(Exception, match=r"owner\.state\.child\.value"):
-        read(Owner())
+    with pytest.raises(Exception, match=r"data_oriented_obj\.state\.child\.value"):
+        read(DataOriented())
 
 
 @test_utils.test()
@@ -196,7 +196,7 @@ def test_nested_dataclass_forwarded_to_func() -> None:
         value: str
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(3)
 
@@ -205,15 +205,15 @@ def test_nested_dataclass_forwarded_to_func() -> None:
         return state.value
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.f32:
-        return get_value(owner.state)
+    def read(data_oriented_obj: qd.Template) -> qd.f32:
+        return get_value(data_oriented_obj.state)
 
-    owner = Owner()
-    assert read(owner) == 3
-    owner.state.value = 7
-    assert read(owner) == 7
-    owner.state.value = 2.5
-    assert read(owner) == 2.5
+    data_oriented_obj = DataOriented()
+    assert read(data_oriented_obj) == 3
+    data_oriented_obj.state.value = 7
+    assert read(data_oriented_obj) == 7
+    data_oriented_obj.state.value = 2.5
+    assert read(data_oriented_obj) == 2.5
 
 
 @test_utils.test()
@@ -225,20 +225,20 @@ def test_nested_dataclass_tensor_replacement() -> None:
         value: str
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(qd.tensor(qd.i32, shape=1, backend=qd.Backend.NDARRAY))
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.f32:
-        return owner.state.value[0]
+    def read(data_oriented_obj: qd.Template) -> qd.f32:
+        return data_oriented_obj.state.value[0]
 
-    owner = Owner()
-    owner.state.value[0] = 3
-    assert read(owner) == 3
-    owner.state.value = qd.tensor(qd.f32, shape=1, backend=qd.Backend.NDARRAY)
-    owner.state.value[0] = 2.5
-    assert read(owner) == 2.5
+    data_oriented_obj = DataOriented()
+    data_oriented_obj.state.value[0] = 3
+    assert read(data_oriented_obj) == 3
+    data_oriented_obj.state.value = qd.tensor(qd.f32, shape=1, backend=qd.Backend.NDARRAY)
+    data_oriented_obj.state.value[0] = 2.5
+    assert read(data_oriented_obj) == 2.5
 
 
 @test_utils.test()
@@ -255,16 +255,18 @@ def test_nested_dataclass_rejects_data_oriented_child() -> None:
         options: int
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(Options())
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return qd.static(owner.state.options.count)
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return qd.static(data_oriented_obj.state.options.count)
 
-    with pytest.raises(Exception, match=r"owner\.state\.options.*Data-oriented objects inside Python dataclass"):
-        read(Owner())
+    with pytest.raises(
+        Exception, match=r"data_oriented_obj\.state\.options.*Data-oriented objects inside Python dataclass"
+    ):
+        read(DataOriented())
 
 
 @pytest.mark.parametrize("dataclass_root", [True, False])
@@ -286,20 +288,22 @@ def test_alternating_dataclass_and_data_oriented_nesting(dataclass_root: bool) -
         middle: str
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.state = State(Middle())
 
     @qd.kernel
-    def read_owner(owner: qd.Template) -> qd.f32:
-        return owner.state.middle.leaf.value
+    def read_data_oriented(data_oriented_obj: qd.Template) -> qd.f32:
+        return data_oriented_obj.state.middle.leaf.value
 
     @qd.kernel
     def read_state(state: qd.RuntimeTyped) -> qd.f32:
         return state.middle.leaf.value
 
-    owner = Owner()
-    read, argument = (read_state, owner.state) if dataclass_root else (read_owner, owner)
+    data_oriented_obj = DataOriented()
+    read, argument = (
+        (read_state, data_oriented_obj.state) if dataclass_root else (read_data_oriented, data_oriented_obj)
+    )
     with pytest.raises(Exception, match=r"state\.middle.*Data-oriented objects inside Python dataclass"):
         read(argument)
 
@@ -314,7 +318,7 @@ def test_nested_dataclass_property_is_rejected(alias_stored_member: bool) -> Non
         value: int = 3
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.stored = State()
 
@@ -323,11 +327,11 @@ def test_nested_dataclass_property_is_rejected(alias_stored_member: bool) -> Non
             return self.stored if alias_stored_member else State()
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.state.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.state.value
 
-    with pytest.raises(Exception, match=r"Owner\.state.*not discovered"):
-        read(Owner())
+    with pytest.raises(Exception, match=r"DataOriented\.state.*not discovered"):
+        read(DataOriented())
 
 
 @pytest.mark.parametrize("template_primitives", [True, False])
@@ -340,23 +344,23 @@ def test_dataclass_added_after_discovery_is_rejected(template_primitives: bool) 
         value: int = 3
 
     @qd.data_oriented(template_primitives=template_primitives)
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.value = 1
 
     @qd.kernel
-    def initial(owner: qd.Template) -> qd.i32:
-        return owner.value
+    def initial(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.value
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.added.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.added.value
 
-    owner = Owner()
-    assert initial(owner) == 1
-    owner.added = State()
-    with pytest.raises(Exception, match=r"Owner\.added.*not discovered"):
-        read(owner)
+    data_oriented_obj = DataOriented()
+    assert initial(data_oriented_obj) == 1
+    data_oriented_obj.added = State()
+    with pytest.raises(Exception, match=r"DataOriented\.added.*not discovered"):
+        read(data_oriented_obj)
 
 
 @test_utils.test()
@@ -364,7 +368,7 @@ def test_unused_dataclass_property_is_not_evaluated() -> None:
     """Property detection must not execute unused getters during discovery."""
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.value = 3
 
@@ -373,15 +377,15 @@ def test_unused_dataclass_property_is_not_evaluated() -> None:
             raise AssertionError("Unused getter executed")
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.value
 
-    assert read(Owner()) == 3
+    assert read(DataOriented()) == 3
 
 
 @test_utils.test()
 def test_dataclass_discovery_guard_allows_nested_dataclass_fields() -> None:
-    """Nested dataclasses expose their declared fields through a data-oriented owner."""
+    """Nested dataclasses expose their declared fields through a data-oriented object."""
 
     @dataclass
     class Leaf:
@@ -392,57 +396,57 @@ def test_dataclass_discovery_guard_allows_nested_dataclass_fields() -> None:
         child: Leaf
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self) -> None:
             self.middle = Middle(Leaf(3))
 
     @qd.kernel
-    def read(owner: qd.Template) -> qd.i32:
-        return owner.middle.child.value
+    def read(data_oriented_obj: qd.Template) -> qd.i32:
+        return data_oriented_obj.middle.child.value
 
-    owner = Owner()
-    assert read(owner) == 3
-    owner.middle.child.value = 7
-    assert read(owner) == 7
+    data_oriented_obj = DataOriented()
+    assert read(data_oriented_obj) == 3
+    data_oriented_obj.middle.child.value = 7
+    assert read(data_oriented_obj) == 7
 
 
 @pytest.mark.parametrize("frozen", [False, True])
 @pytest.mark.parametrize("via_func", [False, True])
 @test_utils.test()
 def test_dataclass_data_oriented_member_rejected_before_fastcache(frozen: bool, via_func: bool) -> None:
-    """Reject an owner inside a dataclass before loading an artifact with missing nested Final dependencies."""
+    """Reject a data-oriented object inside a dataclass before loading an artifact missing nested Final dependencies."""
 
     @dataclass(frozen=True)
     class Config:
         enabled: Final[bool]
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, enabled: bool) -> None:
             self.config = Config(enabled)
 
     @dataclass(frozen=frozen)
     class Envelope:
-        owner: object
+        data_oriented_obj: object
         count: int = 3
 
     @qd.func
     def get_value(arg: qd.RuntimeTyped) -> qd.i32:
-        return 100 if qd.static(arg.owner.config.enabled) else 200
+        return 100 if qd.static(arg.data_oriented_obj.config.enabled) else 200
 
     @qd.kernel(fastcache=True)
     def read(arg: qd.RuntimeTyped, use_func: qd.Template) -> qd.i32:
         if qd.static(use_func):
             return get_value(arg)
         else:
-            return 100 if qd.static(arg.owner.config.enabled) else 200
+            return 100 if qd.static(arg.data_oriented_obj.config.enabled) else 200
 
     @qd.kernel(fastcache=True)
     def unused(arg: qd.RuntimeTyped) -> qd.i32:
         return arg.count
 
     for enabled in (True, False):
-        arg = Envelope(Owner(enabled))
+        arg = Envelope(DataOriented(enabled))
         assert unused(arg) == 3
         with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
             read(arg, via_func)

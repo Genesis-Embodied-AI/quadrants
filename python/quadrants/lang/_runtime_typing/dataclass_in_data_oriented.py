@@ -72,12 +72,12 @@ def collect_dataclass_schemas_in_data_oriented_args(
     # Schemas for this launch, paired with argument indices and member paths.
     launch_arg_schemas: list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]] = []
     for index in template_slots:
-        owner = args[index]
-        if is_dataclass_instance(owner) or not is_data_oriented(owner):
+        data_oriented_obj = args[index]
+        if is_dataclass_instance(data_oriented_obj) or not is_data_oriented(data_oriented_obj):
             continue
 
-        for path in _cached_collect_dataclass_paths_in_data_oriented(owner):
-            child = get_member_at_path(owner, path)
+        for path in _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj):
+            child = get_member_at_path(data_oriented_obj, path)
             if not hasattr(type(child), "__dataclass_fields__"):
                 raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
             schema = cached_infer_dataclass_type(child, ".".join((arg_metas[index].name, *path)))
