@@ -78,7 +78,7 @@ jobs:
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
     with:
       quadrants_run_id: ${{ fromJSON(needs.prepare.outputs.wheel_run) }}
-      benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
+      genesis_sha: ${{ needs.prepare.outputs.genesis_sha }}
       # Only the minimal set of tests Genesis requires to pass on any environment, in the dynamic array mode alone:
       # the full matrix belongs to the CI of Genesis.
       unit_tests_markexpr: required and not slow

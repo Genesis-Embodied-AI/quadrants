@@ -56,7 +56,7 @@ jobs:
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
     with:
       quadrants_run_id: ${{ fromJSON(needs.prepare.outputs.wheel_run) }}
-      benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
+      genesis_sha: ${{ needs.prepare.outputs.genesis_sha }}
     secrets: inherit
 
   activate:
