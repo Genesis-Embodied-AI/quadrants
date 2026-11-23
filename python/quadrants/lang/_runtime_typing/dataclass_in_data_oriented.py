@@ -26,7 +26,7 @@ def _collect_dataclass_paths_in_data_oriented(
     dataclass_paths: list[tuple[str, ...]],
     active_ids: set[int],
 ) -> None:
-    """Record dataclass children of a data-oriented object; recurse only into data-oriented children."""
+    """Record dataclass children of a data-oriented object."""
     if id(data_oriented_obj) in active_ids:
         return
 
