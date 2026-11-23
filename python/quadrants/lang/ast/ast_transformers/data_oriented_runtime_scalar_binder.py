@@ -40,7 +40,10 @@ def _collect_runtime_members_in_data_oriented(
     data_oriented_template_primitives: bool,
     dataclass_members: list[tuple[int, tuple[str, ...], Any]],
 ) -> None:
-    """Walk stored data-oriented attributes, collecting runtime scalars and stopping at dataclass roots."""
+    """Walk stored data-oriented attributes, collecting runtime scalars and stopping at dataclass roots.
+
+    Collect members before pruning. Do not descend into lists, tuples, or dictionaries.
+    """
     obj_id = id(py_obj)
     if obj_id in seen_ids:
         return
