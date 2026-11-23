@@ -102,6 +102,8 @@ def reject_undiscovered_dataclass_member(
     Check the attribute, not the returned object's identity: a property can alias a stored dataclass yet require a
     different launch-binding path. This check does not run on already-compiled kernel launches.
     """
+    # FIXME: This function is symptomatic of attribute discovery and binding needing reorganization. Valid accesses
+    # and missing runtime bindings reach the same fallback, making it confusing why this extra check is needed.
     if not is_dataclass_instance(py_obj):
         return
 
