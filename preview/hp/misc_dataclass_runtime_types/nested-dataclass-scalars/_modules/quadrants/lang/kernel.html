@@ -1048,7 +1048,7 @@
                     <span class="c1"># entry.</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_struct_nd_paths</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="p">[]),</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span>
                     <span class="n">pruning</span><span class="o">.</span><span class="n">fold_kernel_arg_chain_paths</span><span class="p">()</span>
-                    <span class="c1"># Empty maps avoid per-launch hashing of the compiled-kernel key for kernels without member inputs.</span>
+                    <span class="c1"># Keep these maps empty for kernels without member inputs, avoiding per-key lookups at launch.</span>
                     <span class="k">if</span> <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_launch_infos_for_root_dataclasses_in_data_oriented_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
                             <span class="n">kernel_ctx</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span>
@@ -1230,7 +1230,7 @@
             <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_set_struct_ndarray_args</span><span class="p">(</span><span class="n">struct_nd_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">launch_ctx_buffer</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable</span><span class="p">)</span>
 
-            <span class="c1"># The empty-map check avoids hashing the compiled-kernel key on each launch without scalar members.</span>
+            <span class="c1"># Kernels without registered scalar members skip the per-key lookup.</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="p">:</span>
                 <span class="n">runtime_scalar_launch_infos</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">runtime_scalar_launch_infos</span><span class="p">:</span>

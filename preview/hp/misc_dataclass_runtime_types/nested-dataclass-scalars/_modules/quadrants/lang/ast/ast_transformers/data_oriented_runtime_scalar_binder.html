@@ -372,10 +372,7 @@
     <span class="n">data_oriented_template_primitives</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="n">dataclass_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Any</span><span class="p">]],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Walk stored data-oriented attributes, collecting runtime scalars and stopping at dataclass roots.</span>
-
-<span class="sd">    Collect members before pruning. Do not descend into lists, tuples, or dictionaries.</span>
-<span class="sd">    """</span>
+<span class="w">    </span><span class="sd">"""Walk stored data-oriented attributes, collecting runtime scalars and stopping at dataclass roots."""</span>
     <span class="n">obj_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">py_obj</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">obj_id</span> <span class="ow">in</span> <span class="n">seen_ids</span><span class="p">:</span>
         <span class="k">return</span>
