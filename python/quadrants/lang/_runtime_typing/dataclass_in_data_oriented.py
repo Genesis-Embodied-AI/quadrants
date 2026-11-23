@@ -3,7 +3,6 @@
 from typing import Any
 
 from quadrants import _warnings
-
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     RuntimeDataclassSchema,
     cached_infer_dataclass_type,
