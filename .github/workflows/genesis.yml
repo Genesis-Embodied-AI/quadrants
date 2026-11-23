@@ -102,4 +102,6 @@ jobs:
       pull-requests: write
 
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/alarm.yml@main
+    with:
+      wandb_project: genesis-benchmarks-2
     secrets: inherit
