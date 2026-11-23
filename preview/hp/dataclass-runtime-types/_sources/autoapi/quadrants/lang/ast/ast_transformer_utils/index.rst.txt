@@ -298,7 +298,7 @@ Module Contents
 
 
    .. py:attribute:: struct_ndarray_launch_info
-      :type:  list[tuple]
+      :type:  list[tuple[int, int, tuple[str, ...]]]
       :value: []
 
 
@@ -324,7 +324,13 @@ Module Contents
 
 
    .. py:attribute:: runtime_scalar_launch_infos
-      :type:  list[tuple]
+      :type:  list[tuple[int, int, tuple[str, ...], Literal['f', 'i', 'u']]]
+      :value: []
+
+
+
+   .. py:attribute:: launch_infos_for_root_dataclasses_in_data_oriented
+      :type:  list[tuple[int, tuple[str, ...], str, type]]
       :value: []
 
 

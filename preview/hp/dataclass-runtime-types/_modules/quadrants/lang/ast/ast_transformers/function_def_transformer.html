@@ -360,6 +360,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._name_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">create_flat_name</span><span class="p">,</span>
+    <span class="n">create_flat_name_from_parts</span><span class="p">,</span>
     <span class="n">dotted_argument_path_from_flat_name</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._optional_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPTIONAL_ABSENT</span>
@@ -367,6 +368,7 @@
     <span class="n">DeferredMemberError</span><span class="p">,</span>
     <span class="n">DeferredMemberType</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">_extract_arg</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">MemberBinding</span><span class="p">,</span>
@@ -377,7 +379,9 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">bind_data_oriented_runtime_scalars</span><span class="p">,</span>
+    <span class="n">collect_runtime_members_from_data_oriented_args</span><span class="p">,</span>
     <span class="n">register_runtime_dataclass_schema</span><span class="p">,</span>
+    <span class="n">register_runtime_dataclass_schemas</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.symbol_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTResolver</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.buffer_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferView</span>
@@ -492,9 +496,11 @@
         <span class="n">ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span>
         <span class="n">argument_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-        <span class="n">this_arg_features</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">this_arg_features</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">arg_value</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">reject_in_static_scope</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Bind an argument and its nested dataclass members to compiler values."""</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">func_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span>
         <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
@@ -521,25 +527,35 @@
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">DeferredMemberType</span><span class="p">):</span>
                     <span class="n">value</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">dotted_argument_path_from_flat_name</span><span class="p">(</span><span class="n">flat_name</span><span class="p">))</span>
                 <span class="k">elif</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">final_names</span><span class="p">:</span>
+                    <span class="c1"># Keep the Python value so qd.static(config.field) can evaluate it at compile time.</span>
                     <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
                 <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
                     <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_bind_kernel_arg_or_nested_dataclass</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">],</span> <span class="n">child</span>
+                        <span class="n">ctx</span><span class="p">,</span>
+                        <span class="n">flat_name</span><span class="p">,</span>
+                        <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
+                        <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">]</span> <span class="k">if</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+                        <span class="n">child</span><span class="p">,</span>
+                        <span class="n">reject_in_static_scope</span><span class="p">,</span>
                     <span class="p">)</span>
                     <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
                 <span class="k">elif</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">child</span><span class="p">):</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                        <span class="s2">"Data-oriented objects inside Python dataclass fields are unsupported. "</span>
-                        <span class="s2">"Store the dataclass on the data-oriented object instead."</span>
-                    <span class="p">)</span>
+                    <span class="c1"># Attribute access rejects this member if the kernel uses it.</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">child</span>
                 <span class="k">else</span><span class="p">:</span>
+                    <span class="n">features</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="n">this_arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                        <span class="k">else</span> <span class="n">_extract_arg</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">child</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">)</span>
+                    <span class="p">)</span>
                     <span class="n">needs_declaration_call</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">],</span> <span class="s2">""</span><span class="p">,</span> <span class="n">child</span>
+                        <span class="n">ctx</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="s2">""</span><span class="p">,</span> <span class="n">child</span>
                     <span class="p">)</span>
                     <span class="k">if</span> <span class="n">needs_declaration_call</span><span class="p">:</span>
                         <span class="n">decl_type_func</span><span class="p">,</span> <span class="n">type_args</span> <span class="o">=</span> <span class="n">value</span>
                         <span class="n">value</span> <span class="o">=</span> <span class="n">decl_type_func</span><span class="p">(</span><span class="o">*</span><span class="n">type_args</span><span class="p">)</span>
-                <span class="n">bindings</span><span class="p">[</span><span class="n">member_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">MemberBinding</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+                <span class="n">is_scalar</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">)</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">type_ids</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">DataTypeCxx</span><span class="p">)</span>
+                <span class="n">bindings</span><span class="p">[</span><span class="n">member_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">MemberBinding</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">reject_in_static_scope</span> <span class="ow">and</span> <span class="n">is_scalar</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">needs_declaration_call</span><span class="p">,</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
                 <span class="n">ctx</span><span class="p">,</span>
@@ -578,8 +594,29 @@
                 <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
             <span class="p">)</span>
 
+        <span class="n">register_runtime_dataclass_schemas</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">scalar_members</span><span class="p">,</span> <span class="n">dataclass_members</span> <span class="o">=</span> <span class="n">collect_runtime_members_from_data_oriented_args</span><span class="p">(</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">dataclass_instance</span> <span class="ow">in</span> <span class="n">dataclass_members</span><span class="p">:</span>
+            <span class="n">flat_name</span> <span class="o">=</span> <span class="n">create_flat_name_from_parts</span><span class="p">([</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">arg_idx</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="n">path</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">is_used</span><span class="p">(</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">flat_name</span>
+            <span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">schema_entry</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">runtime_schema_by_id</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">dataclass_instance</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">schema_entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Attribute access rejects dataclasses added after the first kernel call if they are used.</span>
+                <span class="k">continue</span>
+            <span class="n">schema</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">schema_entry</span>
+            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_bind_kernel_arg_or_nested_dataclass</span><span class="p">(</span>
+                <span class="n">ctx</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">dataclass_instance</span><span class="p">,</span> <span class="n">reject_in_static_scope</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">launch_infos_for_root_dataclasses_in_data_oriented</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">schema</span><span class="p">)</span>
+            <span class="p">)</span>
         <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_predeclare_struct_ndarrays</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="n">bind_data_oriented_runtime_scalars</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">bind_data_oriented_runtime_scalars</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">)</span>
         <span class="n">compiling_callable</span><span class="o">.</span><span class="n">finalize_params</span><span class="p">()</span>
         <span class="c1"># remove original args</span>
         <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
@@ -617,6 +654,10 @@
         <span class="c1"># Sharing it across the whole arg is safe because the ndarray set rooted at a node does not depend on the path</span>
         <span class="c1"># taken to reach it.</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">_walk_obj</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">seen</span><span class="p">):</span>
+            <span class="c1"># Already handled by _bind_kernel_arg_or_nested_dataclass.</span>
+            <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">bound_dataclass_ids</span><span class="p">:</span>
+                <span class="k">return</span>
+
             <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
                 <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
                     <span class="n">child</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>

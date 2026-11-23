@@ -331,16 +331,14 @@
                   
   <h1>Source code for quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
-<span class="sd">"""Bind dataclass scalars and opted-in data-oriented primitives as runtime kernel inputs."""</span>
+<span class="sd">"""Discover dataclass roots and bind opted-in data-oriented runtime scalars."""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">NamedTuple</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataTypeCxx</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">expr</span><span class="p">,</span> <span class="n">impl</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final.final_dataclass_fields</span><span class="w"> </span><span class="kn">import</span> <span class="n">final_field_names</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">KernelCompilePassContext</span><span class="p">,</span>
@@ -353,8 +351,8 @@
     <span class="n">is_dataclass_instance</span><span class="p">,</span>
     <span class="n">uses_template_primitives</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span><span class="p">,</span> <span class="n">primitive_types</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_real</span><span class="p">,</span> <span class="n">is_signed</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_signed</span>
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_ScalarMember</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
@@ -362,52 +360,26 @@
 
     <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span>
     <span class="n">attr_name</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">value</span><span class="p">:</span> <span class="n">Any</span>
+    <span class="n">value</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span>
     <span class="n">arg_idx</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">attr_chain</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
-    <span class="n">declared_dtype</span><span class="p">:</span> <span class="n">DataTypeCxx</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_collect_runtime_members_in_data_oriented</span><span class="p">(</span>
     <span class="n">py_obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="n">arg_idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
     <span class="n">seen_ids</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
     <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">],</span>
-    <span class="n">lift_plain</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
-    <span class="n">schema_by_id</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">,</span> <span class="nb">str</span><span class="p">]],</span>
+    <span class="n">data_oriented_template_primitives</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">dataclass_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Any</span><span class="p">]],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Collect annotated dataclass scalars and, when lift_plain is True, plain Python scalars beneath an owner.</span>
-
-<span class="sd">    Walk stored data-oriented and dataclass attributes, stopping at previously visited objects. Skip Final fields and</span>
-<span class="sd">    do not descend into lists, tuples, or dicts.</span>
-<span class="sd">    """</span>
+<span class="w">    </span><span class="sd">"""Walk stored data-oriented attributes, collecting runtime scalars and stopping at dataclass roots."""</span>
     <span class="n">obj_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">py_obj</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">obj_id</span> <span class="ow">in</span> <span class="n">seen_ids</span><span class="p">:</span>
         <span class="k">return</span>
 
     <span class="n">seen_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">obj_id</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">py_obj</span><span class="p">):</span>
-        <span class="n">entry</span> <span class="o">=</span> <span class="n">schema_by_id</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">obj_id</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="n">schema</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">entry</span>
-        <span class="n">final_names</span> <span class="o">=</span> <span class="n">final_field_names</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">field</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">schema</span><span class="p">):</span>
-            <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">final_names</span><span class="p">:</span>
-                <span class="k">continue</span>
-            <span class="n">annotation</span> <span class="o">=</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span>
-            <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">annotation</span><span class="p">)</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">type_ids</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">annotation</span><span class="p">,</span> <span class="n">DataTypeCxx</span><span class="p">):</span>
-                <span class="n">scalar_members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                    <span class="n">_ScalarMember</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">annotation</span><span class="p">))</span>
-                <span class="p">)</span>
-            <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-                <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
-                    <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">),</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">lift_plain</span><span class="p">,</span> <span class="n">schema_by_id</span>
-                <span class="p">)</span>
-        <span class="k">return</span>
-
     <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="s2">"_asdict"</span><span class="p">):</span>
         <span class="n">items</span> <span class="o">=</span> <span class="n">py_obj</span><span class="o">.</span><span class="n">_asdict</span><span class="p">()</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
     <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="s2">"__dict__"</span><span class="p">):</span>
@@ -423,18 +395,30 @@
         <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span>
         <span class="c1"># Only exact plain Python primitives become runtime parameters; NumPy scalars and subclasses retain their</span>
         <span class="c1"># compile-time behavior.</span>
-        <span class="k">if</span> <span class="n">lift_plain</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">data_oriented_template_primitives</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
             <span class="n">scalar_members</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_ScalarMember</span><span class="p">(</span><span class="n">py_obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)))</span>
-        <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
-            <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
-                <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen_ids</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">lift_plain</span><span class="p">,</span> <span class="n">schema_by_id</span>
+        <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">id</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen_ids</span><span class="p">:</span>
+                <span class="n">seen_ids</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">attr_val</span><span class="p">))</span>
+                <span class="n">dataclass_members</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">attr_val</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
+            <span class="n">_collect_runtime_members_in_data_oriented</span><span class="p">(</span>
+                <span class="n">attr_val</span><span class="p">,</span>
+                <span class="n">arg_idx</span><span class="p">,</span>
+                <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span>
+                <span class="n">seen_ids</span><span class="p">,</span>
+                <span class="n">scalar_members</span><span class="p">,</span>
+                <span class="n">data_oriented_template_primitives</span><span class="p">,</span>
+                <span class="n">dataclass_members</span><span class="p">,</span>
             <span class="p">)</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_collect_runtime_scalars_from_data_oriented_args</span><span class="p">(</span>
-    <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">arg_metas</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ArgMetadata</span><span class="p">],</span> <span class="n">schema_by_id</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">type</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">"""Collect dataclass scalars beneath data-oriented arguments and plain scalars when their owner opts in."""</span>
+<div class="viewcode-block" id="collect_runtime_members_from_data_oriented_args">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/data_oriented_runtime_scalar_binder/index.html#quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.collect_runtime_members_from_data_oriented_args">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">collect_runtime_members_from_data_oriented_args</span><span class="p">(</span>
+    <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">arg_metas</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ArgMetadata</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">],</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Any</span><span class="p">]]]:</span>
+<span class="w">    </span><span class="sd">"""Return runtime scalars and dataclass roots found beneath data-oriented arguments."""</span>
     <span class="n">owners</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg_meta</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">arg_metas</span><span class="p">):</span>
         <span class="n">anno</span> <span class="o">=</span> <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span>
@@ -449,14 +433,18 @@
             <span class="n">owners</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="n">val</span><span class="p">))</span>
 
     <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">dataclass_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">owners</span><span class="p">:</span>
-        <span class="n">_collect_scalars_in_single_data_oriented</span><span class="p">(</span>
-            <span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">(),</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="ow">not</span> <span class="n">uses_template_primitives</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="n">schema_by_id</span>
+        <span class="n">_collect_runtime_members_in_data_oriented</span><span class="p">(</span>
+            <span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">(),</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">uses_template_primitives</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="n">dataclass_members</span>
         <span class="p">)</span>
-    <span class="k">return</span> <span class="n">scalar_members</span>
+    <span class="k">return</span> <span class="n">scalar_members</span><span class="p">,</span> <span class="n">dataclass_members</span></div>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_create_runtime_scalar_bindings</span><span class="p">(</span><span class="n">func_ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+
+<div class="viewcode-block" id="bind_data_oriented_runtime_scalars">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/data_oriented_runtime_scalar_binder/index.html#quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.bind_data_oriented_runtime_scalars">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bind_data_oriented_runtime_scalars</span><span class="p">(</span><span class="n">func_ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">_ScalarMember</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Record scalar members and create kernel parameters for those used by the compiled kernel.</span>
 
 <span class="sd">    During discovery, record each member's location and scalar kind so accesses can be marked as used.</span>
@@ -475,16 +463,13 @@
     <span class="c1"># Globally unique flat names avoid collisions with dataclass fields.</span>
     <span class="n">func_id</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
 
-    <span class="k">for</span> <span class="n">parent</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">declared_dtype</span> <span class="ow">in</span> <span class="n">scalar_members</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">parent</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">scalar_members</span><span class="p">:</span>
         <span class="c1"># Interned scalar values can be shared by unrelated members.</span>
         <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">attr_name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">bindings</span><span class="p">:</span>
             <span class="k">continue</span>
         <span class="n">value_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">declared_dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">dtype</span> <span class="o">=</span> <span class="n">declared_dtype</span>
-            <span class="n">kind</span> <span class="o">=</span> <span class="s2">"f"</span> <span class="k">if</span> <span class="n">is_real</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="s2">"i"</span> <span class="k">if</span> <span class="n">is_signed</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"u"</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
             <span class="n">dtype</span><span class="p">,</span> <span class="n">kind</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">default_ip</span><span class="p">,</span> <span class="p">(</span><span class="s2">"i"</span> <span class="k">if</span> <span class="n">is_signed</span><span class="p">(</span><span class="n">runtime</span><span class="o">.</span><span class="n">default_ip</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"u"</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
             <span class="n">dtype</span><span class="p">,</span> <span class="n">kind</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">default_fp</span><span class="p">,</span> <span class="s2">"f"</span>
@@ -507,7 +492,8 @@
             <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_arg_load_expr</span><span class="p">(</span><span class="n">arg_id</span><span class="p">,</span> <span class="n">cooked</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">create_load</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">argload_di</span><span class="p">)</span>
         <span class="p">)</span>
         <span class="n">bindings</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">MemberBinding</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">value_expr</span><span class="p">,</span> <span class="n">reject_in_static_scope</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="n">runtime_scalar_launch_infos</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span><span class="p">))</span>
+        <span class="n">runtime_scalar_launch_infos</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span><span class="p">))</span></div>
+
 
 
 <div class="viewcode-block" id="register_runtime_dataclass_schema">
@@ -524,10 +510,10 @@
 
 
 
-<div class="viewcode-block" id="bind_data_oriented_runtime_scalars">
-<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/data_oriented_runtime_scalar_binder/index.html#quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.bind_data_oriented_runtime_scalars">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">bind_data_oriented_runtime_scalars</span><span class="p">(</span><span class="n">func_ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Find opted-in scalar members, then create their compiler bindings."""</span>
+<div class="viewcode-block" id="register_runtime_dataclass_schemas">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/data_oriented_runtime_scalar_binder/index.html#quadrants.lang.ast.ast_transformers.data_oriented_runtime_scalar_binder.register_runtime_dataclass_schemas">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">register_runtime_dataclass_schemas</span><span class="p">(</span><span class="n">func_ctx</span><span class="p">:</span> <span class="n">FuncCompilePassContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Register inferred schemas and stored attribute paths for this compilation pass."""</span>
     <span class="k">assert</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
     <span class="n">pass_ctx</span> <span class="o">=</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span>
     <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">schema</span> <span class="ow">in</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">_launch_arg_schemas</span><span class="p">:</span>
@@ -538,12 +524,7 @@
             <span class="n">pass_ctx</span><span class="o">.</span><span class="n">runtime_dataclass_members</span><span class="o">.</span><span class="n">add</span><span class="p">((</span><span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">),</span> <span class="n">attr</span><span class="p">))</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
             <span class="n">name</span> <span class="o">+=</span> <span class="s2">"."</span> <span class="o">+</span> <span class="n">attr</span>
-        <span class="n">register_runtime_dataclass_schema</span><span class="p">(</span><span class="n">pass_ctx</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-    <span class="n">scalar_members</span> <span class="o">=</span> <span class="n">_collect_runtime_scalars_from_data_oriented_args</span><span class="p">(</span>
-        <span class="n">func_ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">,</span> <span class="n">func_ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="n">pass_ctx</span><span class="o">.</span><span class="n">runtime_schema_by_id</span>
-    <span class="p">)</span>
-    <span class="k">if</span> <span class="n">scalar_members</span><span class="p">:</span>
-        <span class="n">_create_runtime_scalar_bindings</span><span class="p">(</span><span class="n">func_ctx</span><span class="p">,</span> <span class="n">scalar_members</span><span class="p">)</span></div>
+        <span class="n">register_runtime_dataclass_schema</span><span class="p">(</span><span class="n">pass_ctx</span><span class="p">,</span> <span class="n">obj</span><span class="p">,</span> <span class="n">schema</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
 
 </pre></div>
 
