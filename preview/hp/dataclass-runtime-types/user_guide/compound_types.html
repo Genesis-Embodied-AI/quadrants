@@ -802,6 +802,7 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 <p>Stored aliases are supported. Keep references to their containing objects fixed after the first kernel call; replacing containers or changing their layout after that point is unsupported. Ordinary scalar values may change. This does not add discovery through tuples or lists: an indexed alias must refer to a dataclass already reachable through stored attributes.</p>
+<p>Calls evaluated while compiling a kernel or its <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> helpers must not return Python dataclass or data-oriented instances. Create these objects outside kernels and pass them as arguments or through stored attributes.</p>
 </section>
 <section id="runtime-primitives-template-primitives-false">
 <span id="runtime-primitives-template_primitivesfalse"></span><h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>

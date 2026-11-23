@@ -307,10 +307,6 @@ Module Contents
       :type:  set[tuple[int, str]]
 
 
-   .. py:attribute:: runtime_dataclass_binding_objects
-      :type:  set[int]
-
-
    .. py:attribute:: runtime_schema_by_id
       :type:  dict[int, tuple[type, str]]
 
