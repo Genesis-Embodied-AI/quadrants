@@ -75,6 +75,38 @@ def test_svd_f64(dim):
     _test_svd(qd.f64, dim)
 
 
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
+def test_svd3_f64_accuracy():
+    # Deformation gradients near the identity, where the rotations left to zero are tiny, and general matrices over a
+    # wide range of scales, since the thresholds of the decomposition are absolute
+    n = 4096
+    rng = np.random.default_rng(0x5D3F)
+    general = rng.standard_normal((n, 3, 3))
+    inputs = [np.eye(3) + noise * rng.standard_normal((n, 3, 3)) for noise in (1e-8, 1e-6, 1e-4, 1e-1)]
+    inputs += [scale * general for scale in (1e-30, 1e-10, 1.0, 1e10)]
+    inputs.append(general @ np.diag([1.0, 1.0, 0.0]))
+
+    A = qd.Matrix.field(3, 3, dtype=qd.f64, shape=n)
+    U = qd.Matrix.field(3, 3, dtype=qd.f64, shape=n)
+    sigma = qd.Matrix.field(3, 3, dtype=qd.f64, shape=n)
+    V = qd.Matrix.field(3, 3, dtype=qd.f64, shape=n)
+
+    @qd.kernel
+    def run():
+        for i in range(n):
+            U[i], sigma[i], V[i] = qd.svd(A[i], qd.f64)
+
+    for A_np in inputs:
+        A.from_numpy(A_np)
+        run()
+        scale = np.abs(A_np).max(axis=(1, 2))
+        A_reconstructed = U.to_numpy() @ sigma.to_numpy() @ V.to_numpy().transpose(0, 2, 1)
+        assert (np.abs(A_reconstructed - A_np).max(axis=(1, 2)) <= 1e-13 * scale).all()
+        sigma_np = np.linalg.svd(A_np, compute_uv=False)
+        sigma_diag = np.abs(np.diagonal(sigma.to_numpy(), axis1=1, axis2=2))
+        assert (np.abs(np.sort(sigma_diag, axis=1)[:, ::-1] - sigma_np).max(axis=1) <= 1e-13 * scale).all()
+
+
 @test_utils.test()
 def test_transpose_no_loop():
     A = qd.Matrix.field(3, 3, dtype=qd.f32, shape=())
