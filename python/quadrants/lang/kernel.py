@@ -592,7 +592,7 @@ class Kernel(FuncBase):
                     # entry.
                     pruning.fold_struct_nd_paths(self._struct_ndarray_launch_info_by_key.get(key, []), self.arg_metas)
                     pruning.fold_kernel_arg_chain_paths()
-                    # Empty maps avoid per-launch hashing of the compiled-kernel key for kernels without member inputs.
+                    # Keep these maps empty for kernels without member inputs, avoiding per-key lookups at launch.
                     if kernel_ctx.current_pass.launch_infos_for_root_dataclasses_in_data_oriented:
                         self._launch_infos_for_root_dataclasses_in_data_oriented_by_key[key] = (
                             kernel_ctx.current_pass.launch_infos_for_root_dataclasses_in_data_oriented
@@ -771,7 +771,7 @@ class Kernel(FuncBase):
             if struct_nd_info:
                 self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
 
-            # The empty-map check avoids hashing the compiled-kernel key on each launch without scalar members.
+            # Kernels without registered scalar members skip the per-key lookup.
             if self._runtime_scalar_launch_infos_by_compiled_kernel_key:
                 runtime_scalar_launch_infos = self._runtime_scalar_launch_infos_by_compiled_kernel_key.get(key)
                 if runtime_scalar_launch_infos:
