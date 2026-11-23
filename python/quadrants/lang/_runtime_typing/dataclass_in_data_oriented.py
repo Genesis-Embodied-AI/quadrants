@@ -102,6 +102,8 @@ def reject_undiscovered_dataclass_member(
     """
     # FIXME: This function is symptomatic of attribute discovery and binding needing reorganization. Valid accesses
     # and missing runtime bindings reach the same fallback, making it confusing why this extra check is needed.
+    # FIXME: Dataclass discovery should use the instance's actual runtime fields, not declared fields on its type.
+    # FIXME: Data-oriented binding should work like dataclass binding, rather than using None bindings during discovery.
     if not is_dataclass_instance(py_obj):
         return
 
