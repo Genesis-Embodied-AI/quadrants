@@ -91,6 +91,14 @@ def reject_undiscovered_dataclass_member(
 ) -> None:
     """Reject compilation-time access to dataclasses missing from argument member discovery.
 
+    This can reject dataclasses reached through:
+    - Properties or other descriptors, including properties returning an already-discovered dataclass.
+    - Attributes added after discovery, such as obj.extra = State(3).
+    - Attributes changed from a scalar to a dataclass after discovery.
+    - Class-level attributes on data-oriented classes; discovery walks instance attributes.
+    - Dynamic attributes supplied by __getattr__.
+    - Attributes on a dataclass that are not declared dataclass fields.
+
     Check the attribute, not the returned object's identity: a property can alias a stored dataclass yet require a
     different launch-binding path. This check does not run on already-compiled kernel launches.
     """
