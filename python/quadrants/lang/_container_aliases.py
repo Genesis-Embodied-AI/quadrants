@@ -4,7 +4,7 @@ import atexit
 import dataclasses
 from collections.abc import Sequence
 from functools import partial
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 from weakref import ReferenceType, ref
 
 from quadrants import _logging, _warnings
@@ -42,9 +42,10 @@ def _collect_container_ids(py_obj: Any) -> tuple[int, ...]:
 
         seen_ids.add(identity)
         if is_dataclass:
-            pending.extend(getattr(child, field.name) for field in dataclasses.fields(child))
+            pending.extend(getattr(child, field.name) for field in dataclasses.fields(cast(Any, child)))
         else:
-            members = child._asdict() if hasattr(child, "_asdict") else vars(child)
+            asdict = getattr(child, "_asdict", None)
+            members = asdict() if asdict is not None else vars(child)
             pending.extend(value for name, value in members.items() if not name.startswith("_qd_"))
     return tuple(identities)
 
