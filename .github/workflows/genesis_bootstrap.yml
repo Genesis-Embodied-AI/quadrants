@@ -30,7 +30,6 @@ jobs:
     outputs:
       genesis_sha: ${{ steps.prepare.outputs.genesis_sha }}
       wheel_run: ${{ steps.prepare.outputs.wheel_run }}
-      wheel_artifact: ${{ steps.prepare.outputs.wheel_artifact }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,7 +56,6 @@ jobs:
     uses: Genesis-Embodied-AI/genesis-world/.github/workflows/production.yml@main
     with:
       quadrants_run_id: ${{ fromJSON(needs.prepare.outputs.wheel_run) }}
-      quadrants_artifact_id: ${{ fromJSON(needs.prepare.outputs.wheel_artifact) }}
       benchmark_sha: ${{ needs.prepare.outputs.genesis_sha }}
     secrets: inherit
 

@@ -183,7 +183,6 @@ def prepare(directory, event, run_id, attempt):
     outputs = dict(
         genesis_sha=manifest["genesis_sha"],
         wheel_run=manifest["wheel"]["run_id"],
-        wheel_artifact=manifest["wheel"]["artifact_id"],
         snapshot_exists=str(bool(artifacts and any(a["name"] == "benchmark-input" for a in artifacts))).lower(),
     )
     with open(os.environ["GITHUB_OUTPUT"], "a") as stream:
