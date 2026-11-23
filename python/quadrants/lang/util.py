@@ -3,7 +3,7 @@ import os
 import traceback
 import types
 import warnings
-from typing import Any
+from typing import Any, ClassVar, Protocol, TypeGuard
 
 import numpy as np
 from colorama import Fore, Style
@@ -333,7 +333,13 @@ def get_traceback(stacklevel=1):
     return "".join(traceback.format_list(s))
 
 
-def is_data_oriented(obj: Any) -> bool:
+class DataOrientedInstance(Protocol):
+    """An instance whose class carries the data-oriented marker."""
+
+    _data_oriented: ClassVar[bool]
+
+
+def is_data_oriented(obj: object) -> TypeGuard[DataOrientedInstance]:
     """Check whether the object's class inherits the data-oriented marker.
 
     Class dictionaries bypass metaclass attribute hooks, which can recurse indefinitely on Genesis's Pydantic objects.
