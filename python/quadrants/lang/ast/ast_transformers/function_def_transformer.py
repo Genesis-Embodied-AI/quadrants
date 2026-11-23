@@ -270,7 +270,11 @@ class FunctionDefTransformer:
                 ctx.func.func_id, flat_name
             ):
                 continue
-            schema, _ = ctx.kernel_compile_context.current_pass.runtime_schema_by_id[id(dataclass_instance)]
+            schema_entry = ctx.kernel_compile_context.current_pass.runtime_schema_by_id.get(id(dataclass_instance))
+            if schema_entry is None:
+                # Attribute access rejects dataclasses added after the first kernel call if they are used.
+                continue
+            schema, _ = schema_entry
             FunctionDefTransformer._bind_kernel_arg_or_nested_dataclass(
                 ctx, flat_name, schema, None, dataclass_instance, reject_in_static_scope=True
             )
