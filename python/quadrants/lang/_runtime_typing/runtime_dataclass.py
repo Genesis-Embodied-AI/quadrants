@@ -89,6 +89,7 @@ def infer_member_type(
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> InferredMemberType | DeferredMemberType:
     """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
+    # FIXME: Generalize runtime type inference to all kernel arguments, not just dataclass members.
     if isinstance(py_obj, Tensor):
         py_obj = py_obj._unwrap()
     if hasattr(type(py_obj), "__dataclass_fields__"):
