@@ -245,13 +245,13 @@ def test_tensor_slot_later_wrapper_uses_impl_identity_cache():
 
 
 @test_utils.test()
-def test_none_argument_populates_compilation_key_cache():
-    """A ``None`` in a ``qd.Tensor`` slot must land in the template mapper's compilation key cache.
+def test_none_argument_populates_specialization_signature_cache():
+    """A ``None`` in a ``qd.Tensor`` slot must land in the template mapper's specialization signature cache.
 
     ``TemplateMapper.lookup`` skips ``weakref``-tracking any argument whose type is in ``_primitive_types``.
     ``NoneType`` is in that set, so ``weakref.ref(None)`` - which raises ``TypeError`` - is never attempted and the
     entry is stored. Were ``NoneType`` absent, the ``TypeError`` would drop the entry and every ``None`` launch would
-    re-run full compilation key extraction instead of hitting the cache.
+    re-run full specialization signature extraction instead of hitting the cache.
     """
     n = 4
     a = qd.ndarray(qd.f32, shape=(n,))

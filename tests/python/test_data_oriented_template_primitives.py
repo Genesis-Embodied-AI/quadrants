@@ -307,7 +307,8 @@ def test_default_template_primitives_still_bakes():
 
     step(sim)
     np.testing.assert_array_equal(sim.x.to_numpy(), [1, 1, 1, 0, 0, 0, 0, 0])
-    # n is baked as 3; mutating it has no effect on the already-compiled kernel (same compilation key -> no recompile).
+    # n is baked as 3; mutating it has no effect on the already-compiled kernel (same specialization signature -> no
+    # recompile).
     sim.n = 6
     step(sim)
     np.testing.assert_array_equal(sim.x.to_numpy(), [2, 2, 2, 0, 0, 0, 0, 0])

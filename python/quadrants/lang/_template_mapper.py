@@ -110,8 +110,8 @@ class TemplateMapper:
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
         # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
-        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the compilation key cache would serve an entry
-        # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
+        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the specialization signature cache would serve
+        # an entry compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
         #
         # Only ``template_slot_locations`` is iterated: a data_oriented container can only appear at a ``qd.template()``
         # position (a typed-dataclass arg carries a dataclass type, and data_oriented classes are never dataclasses).

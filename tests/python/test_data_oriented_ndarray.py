@@ -200,10 +200,9 @@ def test_data_oriented_ndarray_reassign_same_shape():
 
 # ---------------------------------------------------------------------------
 # 7. Mutation cross-shape: reassign ndarray attribute to a *different-dtype* ndarray. The template-mapper specialisation
-#    key (in ``_template_mapper_hotpath._extract_arg``) returns ``weakref.ref(arg)`` for ``is_data_oriented(arg)``; it
-#    does NOT descend into ndarray children to compute a dtype/ndim-dependent compilation key. So a reassignment to a
-# different
-#    dtype on an unchanged instance id must still re-specialise.
+# key (in ``_template_mapper_hotpath._extract_arg``) returns ``weakref.ref(arg)`` for ``is_data_oriented(arg)``; it does
+# NOT descend into ndarray children to compute a dtype/ndim-dependent specialization signature. So a reassignment to a
+# different dtype on an unchanged instance id must still re-specialise.
 # ---------------------------------------------------------------------------
 
 
@@ -234,10 +233,9 @@ def test_data_oriented_ndarray_reassign_different_dtype():
 
 
 # ---------------------------------------------------------------------------
-# 8. Distinct instances of same class -> compilation key behaviour. Documents that today each fresh instance triggers a
-#    recompile (because the compilation key is ``weakref.ref(arg)`` identity). This is a perf concern, not a correctness
-# one.
-#    We assert correctness here; the recompile count is documented as a perf note.
+# 8. Distinct instances of same class -> specialization signature behaviour. Documents that today each fresh instance
+# triggers a recompile (because the specialization signature is ``weakref.ref(arg)`` identity). This is a perf concern,
+# not a correctness one. We assert correctness here; the recompile count is documented as a perf note.
 # ---------------------------------------------------------------------------
 
 
@@ -701,7 +699,7 @@ def test_data_oriented_ndarray_via_func():
 
 # ---------------------------------------------------------------------------
 # 18. Reassign ndarray to a *different ndim* on the same data_oriented instance. Complementary to test 7 (different-
-#     dtype). Compilation key must change so a 2D-specialised kernel is not reused for a 1D ndarray. Pins the Gap A fix from
+#     dtype). Specialization signature must change so a 2D-specialised kernel is not reused for a 1D ndarray. Pins the Gap A fix from
 #     the dtype side.
 # ---------------------------------------------------------------------------
 
@@ -736,7 +734,7 @@ def test_data_oriented_ndarray_reassign_different_ndim():
 
 
 # ---------------------------------------------------------------------------
-# 19. Compilation key descent for nested data_oriented + ndarray reassign at the leaf. Confirms the recursive walker in
+# 19. Specialization signature descent for nested data_oriented + ndarray reassign at the leaf. Confirms the recursive walker in
 #     ``_collect_struct_nd_descriptors`` reaches through nested data_oriented.
 # ---------------------------------------------------------------------------
 
@@ -776,11 +774,9 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 
 # ---------------------------------------------------------------------------
-# 20. No compilation key regression for data_oriented containers WITHOUT ndarrays. The Gap A fix prepends ndarray
-# descriptors
-#     only when ndarrays are present; otherwise the original ``weakref.ref(arg)`` compilation key is preserved (one spec
-# per
-#     instance). This test pins the no-ndarray case.
+# 20. No specialization signature regression for data_oriented containers WITHOUT ndarrays. The Gap A fix prepends
+# ndarray descriptors only when ndarrays are present; otherwise the original ``weakref.ref(arg)`` specialization
+# signature is preserved (one spec per instance). This test pins the no-ndarray case.
 # ---------------------------------------------------------------------------
 
 
