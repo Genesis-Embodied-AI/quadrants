@@ -249,13 +249,11 @@ def _infer_dataclass_runtime_member_types(
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
     has_deferred_error = False
     for name, is_final in field_names_and_final:
+        child = getattr(dataclass_instance, name)
         if is_final:
             needs_member_check = True
-            member_type = infer_final_field_annotation(
-                getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
-            )
+            member_type = infer_final_field_annotation(child, final_non_frozen_path, name, final_value_key_by_value_id)
         else:
-            child = getattr(dataclass_instance, name)
             child_non_frozen_ancestor_path = None
             if not frozen:
                 child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
