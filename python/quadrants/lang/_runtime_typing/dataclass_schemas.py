@@ -234,9 +234,9 @@ def _infer_dataclass_runtime_member_types(
     non_frozen_ancestor_path: str | None,
     final_value_key_by_value_id: FinalValueKeyCache | None,
 ) -> tuple[list[InferredMemberType | DeferredMemberType | "_SpecialForm"], bool, bool]:
-    """Read members and infer their types, returning (member_types, needs_member_check, has_deferred).
+    """Read members and infer their types, returning (member_types, needs_member_check, has_deferred_error).
 
-    needs_member_check means inferred types may need checking before reuse. has_deferred marks errors raised only
+    needs_member_check means inferred types may need checking before reuse. has_deferred_error marks errors raised only
     if a member is used during compilation.
     """
     dataclass_type = type(dataclass_instance)
@@ -247,7 +247,7 @@ def _infer_dataclass_runtime_member_types(
         final_non_frozen_path = dataclass_type.__name__
     needs_member_check = not params.frozen
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
-    has_deferred = False
+    has_deferred_error = False
     for name, is_final in field_names_and_final:
         if is_final:
             needs_member_check = True
@@ -272,13 +272,13 @@ def _infer_dataclass_runtime_member_types(
                 and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
             ):
                 needs_member_check = True
-        has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
+        has_deferred_error |= isinstance(member_type, DeferredMemberType) or getattr(
             member_type, "_qd_has_deferred_errors", False
         )
         member_types.append(member_type)
     # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
-    needs_member_check |= has_deferred
-    return member_types, needs_member_check, has_deferred
+    needs_member_check |= has_deferred_error
+    return member_types, needs_member_check, has_deferred_error
 
 
 def cached_infer_dataclass_schema(
@@ -319,7 +319,7 @@ def cached_infer_dataclass_schema(
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
     params = getattr(dataclass_type, "__dataclass_params__")
-    member_types, needs_member_check, has_deferred = _infer_dataclass_runtime_member_types(
+    member_types, needs_member_check, has_deferred_error = _infer_dataclass_runtime_member_types(
         dataclass_instance,
         field_names_and_final,
         path,
@@ -359,7 +359,7 @@ def cached_infer_dataclass_schema(
                     "__hash__": dataclass_type.__hash__,
                     "_qd_underlying_dataclass": dataclass_type,
                     "_qd_frozen": not needs_member_check,
-                    "_qd_has_deferred_errors": has_deferred,
+                    "_qd_has_deferred_errors": has_deferred_error,
                     # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                     # must share a specialization.
                     "_qd_type_signature": (
@@ -377,7 +377,7 @@ def cached_infer_dataclass_schema(
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     if not needs_member_check or (
-        params.frozen and not has_deferred and not has_final_fields and non_frozen_ancestor_path is None
+        params.frozen and not has_deferred_error and not has_final_fields and non_frozen_ancestor_path is None
     ):
         if schema_by_numeric_defaults_and_ancestor_path is None:
             schema_by_numeric_defaults_and_ancestor_path = {}
@@ -447,14 +447,14 @@ def prepare_kernel_dataclass_args_for_mapper(
     final_value_key_by_value_id: FinalValueKeyCache = {}
     kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
     kernel.mapper.arguments = kernel.arg_metas
-    has_deferred = False
+    has_deferred_error = False
     unstable = False
     for meta in kernel.arg_metas:
         schema = meta.annotation
         if hasattr(schema, "_qd_underlying_dataclass"):
-            has_deferred |= schema._qd_has_deferred_errors
+            has_deferred_error |= schema._qd_has_deferred_errors
             unstable |= not schema._qd_frozen
-    kernel._runtime_has_deferred = has_deferred
+    kernel._runtime_has_deferred = has_deferred_error
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations
@@ -463,7 +463,7 @@ def prepare_kernel_dataclass_args_for_mapper(
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object.
     kernel.mapper._mapping_cache_disabled = unstable or None
-    kernel._runtime_metadata_args_hash = args_hash if not unstable and not has_deferred else None
+    kernel._runtime_metadata_args_hash = args_hash if not unstable and not has_deferred_error else None
     kernel._runtime_metadata_defaults = defaults
 
     return final_value_key_by_value_id
