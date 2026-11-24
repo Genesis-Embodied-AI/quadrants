@@ -9,11 +9,18 @@ from quadrants.lang.struct import StructType
 from quadrants.types import buffer_view_type, ndarray_type
 
 
+class DataclassOptions(Protocol):
+    """Describe the dataclass decorator options consumed by schema processing."""
+
+    frozen: bool
+    unsafe_hash: bool
+
+
 class DataclassInstance(Protocol):
     """Describe the field metadata and decorator options shared by Python dataclass instances."""
 
     __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
-    __dataclass_params__: ClassVar["dataclasses._DataclassParams"]
+    __dataclass_params__: ClassVar[DataclassOptions]
 
 
 class RuntimeDataclassSchema(DataclassInstance, Protocol):

@@ -9,6 +9,7 @@ import dataclasses
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import _FIELD
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -332,7 +333,6 @@ def cached_infer_dataclass_schema(
         return cached_schema_entry.schema
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
-    params = dataclass_type.__dataclass_params__
     member_types, needs_member_check, has_deferred_error = _infer_dataclass_runtime_member_types(
         dataclass_instance,
         field_names_and_final,
@@ -369,7 +369,10 @@ def cached_infer_dataclass_schema(
                     "__module__": dataclass_type.__module__,
                     "__qualname__": dataclass_type.__qualname__,
                     "__dataclass_fields__": fields,
-                    "__dataclass_params__": params,
+                    "__dataclass_params__": SimpleNamespace(
+                        frozen=is_frozen_dataclass(dataclass_type),
+                        unsafe_hash=False,
+                    ),
                     "__hash__": dataclass_type.__hash__,
                     "_qd_underlying_dataclass": dataclass_type,
                     "_qd_needs_member_check": needs_member_check,

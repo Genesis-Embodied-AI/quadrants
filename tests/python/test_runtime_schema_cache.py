@@ -26,6 +26,8 @@ def test_schema_cache_does_not_modify_instances(slots: bool, unsafe_hash: bool) 
     state = State(1)
     before = dict(vars(state)) if not slots else None
     first = cached_infer_dataclass_schema(state, "state")
+    assert first.__dataclass_params__.frozen is True
+    assert first.__dataclass_params__.unsafe_hash is False
     assert cached_infer_dataclass_schema(state, "state") is first
     if slots:
         assert _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(state) is None
