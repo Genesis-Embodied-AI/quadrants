@@ -5,10 +5,10 @@ structure lets compilation, inlined calls, dispatch and launch packing share pre
 without modifying the user's class or its annotations.
 """
 
-import copy
 import dataclasses
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import _FIELD
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -68,8 +68,8 @@ _schema_by_dataclass_instance_and_context: WeakIdentityCache[
 _schema_by_dataclass_type_and_member_types: dict[
     tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]
 ] = {}
-# Source classes, ordered field descriptions, and whether any fields are Final, reused across inference calls.
-_field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...], bool]] = {}
+# Source classes, ordered field names and Final flags, and whether any fields are Final.
+_field_plans: dict[int, tuple[type, tuple[tuple[str, bool], ...], bool]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
 _matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
 # Inferred struct type descriptions, keyed by ordered member names and type identities.
@@ -184,10 +184,10 @@ def cached_infer_dataclass_schema(
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
         field_plan = tuple(
-            (field.name, field, dataclass_field_is_final(dataclass_type, field.name, field.type))
+            (field.name, dataclass_field_is_final(dataclass_type, field.name, field.type))
             for field in dataclasses.fields(dataclass_type)
         )
-        has_final_fields = any(is_final for _, _, is_final in field_plan)
+        has_final_fields = any(is_final for _, is_final in field_plan)
         plan = (dataclass_type, field_plan, has_final_fields)
         _field_plans[id(dataclass_type)] = plan
     _, field_plan, has_final_fields = plan
@@ -199,7 +199,7 @@ def cached_infer_dataclass_schema(
     stable = params.frozen and not has_final_fields
     member_types = []
     has_deferred = False
-    for name, field, is_final in field_plan:
+    for name, is_final in field_plan:
         if is_final:
             member_type = infer_final_field_annotation(
                 getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
@@ -231,16 +231,19 @@ def cached_infer_dataclass_schema(
     key = (
         id(dataclass_type),
         stable,
-        tuple((name, id(member_type)) for (name, _, _), member_type in zip(field_plan, member_types)),
+        tuple((name, id(member_type)) for (name, _), member_type in zip(field_plan, member_types)),
     )
     schema = _schema_by_dataclass_type_and_member_types.get(key)
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
         # The class plan retains the dataclass_type and field order; only runtime member types and stability vary here.
         fields = {}
-        for (name, field, _), member_type in zip(field_plan, member_types):
-            resolved = copy.copy(field)
+        for (name, _), member_type in zip(field_plan, member_types):
+            resolved = dataclasses.field(metadata=dataclass_type.__dataclass_fields__[name].metadata)
+            resolved.name = name
             resolved.type = member_type
+            # dataclasses.fields() includes only entries marked as normal fields.
+            resolved._field_type = _FIELD
             fields[name] = resolved
         # FIXME: Replace this fake dataclass with a schema object, and migrate the dataclass-processing code that
         # consumes it to explicitly expect schema objects rather than relying on the dataclass interface.
