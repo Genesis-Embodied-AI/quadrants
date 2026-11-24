@@ -223,12 +223,12 @@ def cached_infer_dataclass_schema(
     schema_by_context = _schema_by_dataclass_instance_and_context.get(dataclass_instance)
     # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
     # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
-    inference_context_key = (
+    context = (
         id(runtime.default_ip),
         id(runtime.default_fp),
         non_frozen_ancestor_path,
     )
-    cached_schema = schema_by_context.get(inference_context_key) if schema_by_context is not None else None
+    cached_schema = schema_by_context.get(context) if schema_by_context is not None else None
     if isinstance(cached_schema, SchemaNeedingMemberChecks):
         if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
             return cached_schema.schema
@@ -341,7 +341,7 @@ def cached_infer_dataclass_schema(
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
 
-        schema_by_context[inference_context_key] = (
+        schema_by_context[context] = (
             schema
             if stable
             else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
