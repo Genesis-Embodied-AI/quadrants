@@ -118,6 +118,27 @@ _buffer_annotation = buffer_view_type.BufferViewType()
 _array_annotation = ndarray_type.NdarrayType()
 
 
+def _cached_get_field_names_and_finality(
+    dataclass_type: type[DataclassInstance],
+) -> tuple[tuple[tuple[str, bool], ...], bool]:
+    """Return cached (field name, is_final) pairs and whether any field is Final."""
+    _, field_names_and_final, has_final_fields = _field_names_and_finality_by_dataclass_type.get(
+        id(dataclass_type), (None, None, False)
+    )
+    if field_names_and_final is None:
+        field_names_and_final = tuple(
+            (field.name, dataclass_field_is_final(dataclass_type, field.name, field.type))
+            for field in dataclasses.fields(dataclass_type)
+        )
+        has_final_fields = any(is_final for _, is_final in field_names_and_final)
+        _field_names_and_finality_by_dataclass_type[id(dataclass_type)] = (
+            dataclass_type,
+            field_names_and_final,
+            has_final_fields,
+        )
+    return field_names_and_final, has_final_fields
+
+
 def is_dataclass_annotation(annotation: Any) -> bool:
     """Recognize RuntimeTyped and concrete dataclass annotations without inferring member types from them."""
     return annotation is RuntimeTyped or isinstance(annotation, type) and dataclasses.is_dataclass(annotation)
@@ -239,20 +260,7 @@ def cached_infer_dataclass_schema(
     ):
         return cached_schema_entry.schema
 
-    _, field_names_and_final, has_final_fields = _field_names_and_finality_by_dataclass_type.get(
-        id(dataclass_type), (None, None, False)
-    )
-    if field_names_and_final is None:
-        field_names_and_final = tuple(
-            (field.name, dataclass_field_is_final(dataclass_type, field.name, field.type))
-            for field in dataclasses.fields(dataclass_type)
-        )
-        has_final_fields = any(is_final for _, is_final in field_names_and_final)
-        _field_names_and_finality_by_dataclass_type[id(dataclass_type)] = (
-            dataclass_type,
-            field_names_and_final,
-            has_final_fields,
-        )
+    field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
     params = getattr(dataclass_type, "__dataclass_params__")
     container_prevents_rebinding = params.frozen or params.unsafe_hash
     final_non_frozen_path = non_frozen_ancestor_path
