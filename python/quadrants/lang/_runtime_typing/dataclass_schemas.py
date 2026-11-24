@@ -296,6 +296,46 @@ def _infer_dataclass_runtime_member_types(
     return member_types, needs_member_check, has_deferred_error
 
 
+def _create_dataclass_schema(
+    dataclass_type: type[DataclassInstance],
+    fields: dict[str, dataclasses.Field[Any]],
+    needs_member_check: bool,
+    has_deferred_error: bool,
+) -> type[RuntimeDataclassSchema]:
+    """Create a schema class from inferred fields and cache-reuse flags."""
+    # FIXME: Replace this fake dataclass with a schema object, and migrate the dataclass-processing code that
+    # consumes it to explicitly expect schema objects rather than relying on the dataclass interface.
+    return cast(
+        type[RuntimeDataclassSchema],
+        type(
+            dataclass_type.__name__,
+            (),
+            {
+                "__module__": dataclass_type.__module__,
+                "__qualname__": dataclass_type.__qualname__,
+                "__dataclass_fields__": fields,
+                "__dataclass_params__": SimpleNamespace(
+                    frozen=is_frozen_dataclass(dataclass_type),
+                    unsafe_hash=False,
+                ),
+                "__hash__": dataclass_type.__hash__,
+                "_qd_underlying_dataclass": dataclass_type,
+                "_qd_needs_member_check": needs_member_check,
+                "_qd_has_deferred_errors": has_deferred_error,
+                # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
+                # must share a specialization.
+                "_qd_type_signature": (
+                    id(dataclass_type),
+                    tuple(
+                        (name, getattr(field.type, "_qd_type_signature", id(field.type)))
+                        for name, field in fields.items()
+                    ),
+                ),
+            },
+        ),
+    )
+
+
 def cached_infer_dataclass_schema(
     dataclass_instance: DataclassInstance,
     path: str,
@@ -358,37 +398,7 @@ def cached_infer_dataclass_schema(
             # dataclasses.fields() includes only entries marked as normal fields.
             resolved._field_type = _FIELD
             fields[name] = resolved
-        # FIXME: Replace this fake dataclass with a schema object, and migrate the dataclass-processing code that
-        # consumes it to explicitly expect schema objects rather than relying on the dataclass interface.
-        schema = cast(
-            type[RuntimeDataclassSchema],
-            type(
-                dataclass_type.__name__,
-                (),
-                {
-                    "__module__": dataclass_type.__module__,
-                    "__qualname__": dataclass_type.__qualname__,
-                    "__dataclass_fields__": fields,
-                    "__dataclass_params__": SimpleNamespace(
-                        frozen=is_frozen_dataclass(dataclass_type),
-                        unsafe_hash=False,
-                    ),
-                    "__hash__": dataclass_type.__hash__,
-                    "_qd_underlying_dataclass": dataclass_type,
-                    "_qd_needs_member_check": needs_member_check,
-                    "_qd_has_deferred_errors": has_deferred_error,
-                    # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
-                    # must share a specialization.
-                    "_qd_type_signature": (
-                        id(dataclass_type),
-                        tuple(
-                            (name, getattr(field.type, "_qd_type_signature", id(field.type)))
-                            for name, field in fields.items()
-                        ),
-                    ),
-                },
-            ),
-        )
+        schema = _create_dataclass_schema(dataclass_type, fields, needs_member_check, has_deferred_error)
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
