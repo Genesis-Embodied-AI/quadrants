@@ -5,10 +5,9 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from quadrants._tensor_wrapper import Tensor
+from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.field import Field
-from quadrants.types.ndarray_type import NdarrayType
 
 if TYPE_CHECKING:
     import dataclasses
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
 class FrozenSchemaEntry:
     """Store member names and types, never child objects that could retain the owning dataclass."""
 
-    __slots__ = ("schema", "tensor_guards", "member_guards")
+    __slots__ = ("schema", "member_guards")
 
     def __init__(
         self,
@@ -36,20 +35,14 @@ class FrozenSchemaEntry:
     ) -> None:
         """Record guards for members whose runtime representation can change inside a frozen dataclass."""
         self.schema = schema
-        self.tensor_guards = []
         self.member_guards = []
         for (name, _, is_final), member_type in zip(field_plan, member_types):
             if is_final:
                 # Final values are still validated by specialization and launch handling; their declared type is fixed.
                 continue
             child = getattr(value, name)
-            if isinstance(child, Tensor):
-                backing = child._unwrap()
-                if (isinstance(backing, Ndarray) and isinstance(member_type, NdarrayType)) or (
-                    isinstance(backing, Field) and member_type is Tensor
-                ):
-                    self.tensor_guards.append((name, type(child), type(backing)))
-                    continue
+            if type(child) in _TENSOR_WRAPPER_TYPES:
+                continue
             if hasattr(member_type, "_qd_underlying_dataclass"):
                 if getattr(member_type, "_qd_frozen"):
                     continue
@@ -64,11 +57,7 @@ class FrozenSchemaEntry:
         ancestor_ids: frozenset[int],
         infer_member_type: "Callable[[Any, str, frozenset[int]], InferredMemberType | DeferredMemberType]",
     ) -> bool:
-        """Check whether the current members still match the cached schema's wrapper and type guards."""
-        for name, wrapper_type, backing_type in self.tensor_guards:
-            tensor = getattr(dataclass_instance, name)
-            if type(tensor) is not wrapper_type or type(tensor._unwrap()) is not backing_type:
-                return False
+        """Check whether the current member types still match the cached schema."""
         for name, member_type in self.member_guards:
             child = getattr(dataclass_instance, name)
             if infer_member_type(child, f"{path}.{name}", ancestor_ids) is not member_type:
