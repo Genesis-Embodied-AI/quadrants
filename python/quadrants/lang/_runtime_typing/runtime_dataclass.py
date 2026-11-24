@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 
 
 # Schema lookup uses three cache layers:
-# - Dataclass instance (and context) -> schema, possibly with member checks.
+# - Dataclass instance (and context) -> schema or SchemaNeedingMemberChecks.
 # - Dataclass type -> field names and Final flags.
 # - Dataclass type and inferred member types -> schema.
 #
