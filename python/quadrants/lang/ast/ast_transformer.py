@@ -19,7 +19,7 @@ from quadrants.lang import ops as qd_ops
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    validate_dataclass_member_access,
+    reject_undiscovered_dataclass_member,
 )
 from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
 from quadrants.lang._unpacked import _UnpackedVectorRef
@@ -831,7 +831,7 @@ class ASTTransformer(Builder):
             if lifted is not None:
                 return node.ptr
 
-            validate_dataclass_member_access(
+            reject_undiscovered_dataclass_member(
                 node.value.ptr, node.attr, node.ptr, ctx.kernel_compile_context.current_pass.runtime_dataclass_members
             )
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
@@ -857,7 +857,7 @@ class ASTTransformer(Builder):
                 node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
-            validate_dataclass_member_access(
+            reject_undiscovered_dataclass_member(
                 node.value.ptr, node.attr, node.ptr, ctx.kernel_compile_context.current_pass.runtime_dataclass_members
             )
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build

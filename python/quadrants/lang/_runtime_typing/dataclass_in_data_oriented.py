@@ -86,7 +86,7 @@ def collect_dataclass_schemas_in_data_oriented_args(
     return launch_arg_schemas
 
 
-def validate_dataclass_member_access(
+def reject_undiscovered_dataclass_member(
     parent: Any, name: str, py_obj: Any, discovered_members: set[tuple[int, str]]
 ) -> None:
     """Reject compilation-time access to dataclasses missing from argument member discovery.
