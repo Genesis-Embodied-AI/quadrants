@@ -62,6 +62,39 @@ if TYPE_CHECKING:
 # - Dataclass type -> field names and Final flags.
 # - Dataclass type and inferred member types -> schema.
 #
+# Arriving dataclass instance
+# |
+# +-- Already in the ancestor chain?
+# |   +-- Yes -> Raise cycle error
+# |   `-- No
+# |
+# +-- Look up instance and context
+# |   +-- Schema -> Return it
+# |   +-- SchemaNeedingMemberChecks
+# |   |   +-- Checks pass -> Return its schema
+# |   |   `-- Checks fail -> Continue below
+# |   `-- Cache miss -> Continue below
+# |
+# +-- Look up field names and Final flags by dataclass type
+# |   +-- Hit -> Use cached names and flags
+# |   `-- Miss -> Collect names and flags; cache them
+# |
+# +-- Read current member values and infer their types
+# |
+# +-- Look up schema by dataclass type and member types
+# |   +-- Hit -> Use cached schema
+# |   `-- Miss -> Create schema; cache it
+# |
+# +-- Decide what to store for this instance and context
+# |   +-- No checks needed -> Store schema
+# |   +-- Checks needed and caching allowed
+# |   |   `-- Store SchemaNeedingMemberChecks
+# |   `-- Caching not allowed -> Store nothing
+# |
+# `-- Return schema
+#
+# Instance-cache writes require weak-reference support; otherwise return the schema without storing it.
+#
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
 _schema_by_dataclass_instance_and_context: WeakIdentityCache[
     dict[InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks]
