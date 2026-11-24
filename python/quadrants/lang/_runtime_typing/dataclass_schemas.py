@@ -49,6 +49,8 @@ from quadrants.types import buffer_view_type, ndarray_type, primitive_types
 from quadrants.types.annotations import RuntimeTyped
 
 if TYPE_CHECKING:
+    from typing import _SpecialForm
+
     from quadrants.lang._func_base import FuncBase
     from quadrants.lang._quadrants_callable import (
         BoundQuadrantsCallable,
@@ -224,6 +226,61 @@ def infer_member_type(
     )
 
 
+def _infer_dataclass_member_types(
+    dataclass_instance: DataclassInstance,
+    field_names_and_final: tuple[tuple[str, bool], ...],
+    path: str,
+    ancestor_ids: frozenset[int],
+    non_frozen_ancestor_path: str | None,
+    final_value_key_by_value_id: FinalValueKeyCache | None,
+) -> tuple[list[InferredMemberType | DeferredMemberType | "_SpecialForm"], bool, bool]:
+    """Read members and infer their types, returning (member_types, stable, has_deferred).
+
+    stable means the schema needs no member checks before reuse. has_deferred marks errors raised only if a member
+    is used during compilation.
+    """
+    dataclass_type = type(dataclass_instance)
+    params = getattr(dataclass_type, "__dataclass_params__")
+    container_prevents_rebinding = params.frozen or params.unsafe_hash
+    final_non_frozen_path = non_frozen_ancestor_path
+    if not container_prevents_rebinding:
+        final_non_frozen_path = dataclass_type.__name__
+    stable = params.frozen
+    member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
+    has_deferred = False
+    for name, is_final in field_names_and_final:
+        if is_final:
+            stable = False
+            member_type = infer_final_field_annotation(
+                getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
+            )
+        else:
+            child = getattr(dataclass_instance, name)
+            child_non_frozen_ancestor_path = None
+            if not container_prevents_rebinding:
+                child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
+            elif non_frozen_ancestor_path is not None:
+                child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
+            member_type = infer_member_type(
+                child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
+            )
+            if dataclasses.is_dataclass(member_type):
+                stable &= getattr(member_type, "_qd_frozen")
+            elif (
+                child is not None
+                and type(child) not in _TENSOR_WRAPPER_TYPES
+                and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
+            ):
+                stable = False
+        has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
+            member_type, "_qd_has_deferred_errors", False
+        )
+        member_types.append(member_type)
+    # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
+    stable &= not has_deferred
+    return member_types, stable, has_deferred
+
+
 def cached_infer_dataclass_schema(
     dataclass_instance: DataclassInstance,
     path: str,
@@ -262,42 +319,14 @@ def cached_infer_dataclass_schema(
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
     params = getattr(dataclass_type, "__dataclass_params__")
-    container_prevents_rebinding = params.frozen or params.unsafe_hash
-    final_non_frozen_path = non_frozen_ancestor_path
-    if not container_prevents_rebinding:
-        final_non_frozen_path = dataclass_type.__name__
-    stable = params.frozen and not has_final_fields
-    member_types = []
-    has_deferred = False
-    for name, is_final in field_names_and_final:
-        if is_final:
-            member_type = infer_final_field_annotation(
-                getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
-            )
-        else:
-            child = getattr(dataclass_instance, name)
-            child_non_frozen_ancestor_path = None
-            if not container_prevents_rebinding:
-                child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
-            elif non_frozen_ancestor_path is not None:
-                child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
-            member_type = infer_member_type(
-                child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
-            )
-            if dataclasses.is_dataclass(member_type):
-                stable &= getattr(member_type, "_qd_frozen")
-            elif (
-                child is not None
-                and type(child) not in _TENSOR_WRAPPER_TYPES
-                and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
-            ):
-                stable = False
-        has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
-            member_type, "_qd_has_deferred_errors", False
-        )
-        member_types.append(member_type)
-    # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
-    stable &= not has_deferred
+    member_types, stable, has_deferred = _infer_dataclass_member_types(
+        dataclass_instance,
+        field_names_and_final,
+        path,
+        ancestor_ids,
+        non_frozen_ancestor_path,
+        final_value_key_by_value_id,
+    )
     key = (
         id(dataclass_type),
         stable,
@@ -306,7 +335,7 @@ def cached_infer_dataclass_schema(
     schema = _schema_by_dataclass_type_and_member_types.get(key)
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
-        # The class plan retains the dataclass_type and field order; only runtime member types and stability vary here.
+        # The field cache retains the dataclass type and field order; member types and stability come from inference.
         fields = {}
         for (name, _), member_type in zip(field_names_and_final, member_types):
             resolved = dataclasses.field(metadata=dataclass_type.__dataclass_fields__[name].metadata)
