@@ -156,7 +156,10 @@ def test_baseline_publication_is_idempotent(manifest, tmp_path):
         store.assert_called_once_with(tmp_path, manifest, benchmarks.PROJECT)
 
 
-def test_baseline_copies_bytes_and_publishes_summaries_before_record(manifest, tmp_path):
+@pytest.mark.parametrize("from_record", [False, True])
+def test_baseline_copies_bytes_and_publishes_summaries_before_record(manifest, tmp_path, from_record):
+    if from_record:
+        manifest = dict(manifest, kind="record", artifact="staging:v0")
     for kind, data in (("speed", "runtime_fps=100 | compile_time=10 | realtime_factor=1"), ("mem", "max_mem_mb=100")):
         for mode in (0, 1):
             directory = tmp_path / f"{kind}-test-{mode}"
@@ -170,6 +173,8 @@ def test_baseline_copies_bytes_and_publishes_summaries_before_record(manifest, t
         assert [config["project"] for config in configs] == ["quadrants-genesis-benchmarks"] * 3
         assert configs[0]["name"].startswith("speed-")
         assert configs[1]["name"].startswith("mem-")
+        assert all("kind" not in config["config"] for config in configs[:2])
+        assert all(config["config"].get("artifact") != "staging:v0" for config in configs)
         assert configs[2]["config"]["kind"] == "record"
         assert all(config["config"]["revision"] == "landed@Genesis-Embodied-AI/quadrants/main" for config in configs)
         assert len({config["config"]["publication"] for config in configs}) == 1
@@ -187,10 +192,16 @@ def test_failed_summary_cannot_publish_baseline_record(manifest, tmp_path):
         initialize.assert_not_called()
 
 
-def test_cleanup_deletes_only_expired_staging_runs_and_artifacts():
+@pytest.mark.parametrize("timestamp_format", ["naive", "offset", "z"])
+def test_cleanup_deletes_only_expired_staging_runs_and_artifacts(timestamp_format):
     now = datetime.now(timezone.utc)
+    if timestamp_format == "naive":
+        now = now.replace(tzinfo=None)
     old = MagicMock(created_at=(now - timedelta(days=8)).isoformat())
     recent = MagicMock(created_at=(now - timedelta(days=6)).isoformat())
+    if timestamp_format == "z":
+        old.created_at = old.created_at.replace("+00:00", "Z")
+        recent.created_at = recent.created_at.replace("+00:00", "Z")
     with patch.object(benchmarks.wandb, "Api") as api:
         api.return_value.runs.return_value = [old, recent]
         benchmarks.cleanup()

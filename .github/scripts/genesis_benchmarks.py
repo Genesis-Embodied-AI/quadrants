@@ -240,7 +240,8 @@ def promote(manifest):
 def store_measurements(directory, manifest, project):
     # Each publication has its own identity, so simultaneous promotion handlers cannot mix partial uploads.
     publication = uuid.uuid4().hex
-    config = {**manifest, "publication": publication}
+    config = {key: value for key, value in manifest.items() if key not in ("kind", "artifact")}
+    config["publication"] = publication
     entity, project_name = project.split("/")
     if project == PROJECT:
         config["revision"] = f"{manifest['baseline_sha']}@{REPOSITORY}/main"
@@ -351,7 +352,10 @@ def cleanup():
     # Materialize before deleting so pagination cannot skip runs as the result set shrinks.
     runs = list(wandb.Api().runs(STAGING_PROJECT, filters={"createdAt": {"$lt": cutoff.isoformat()}}))
     for run in runs:
-        if datetime.fromisoformat(run.created_at.replace("Z", "+00:00")) < cutoff:
+        created = datetime.fromisoformat(run.created_at.replace("Z", "+00:00"))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if created < cutoff:
             run.delete(delete_artifacts=True)
             print(f"Deleted expired staging run {run.id}")
 
