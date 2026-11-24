@@ -57,6 +57,11 @@ if TYPE_CHECKING:
     from quadrants.lang.kernel import Kernel
 
 
+# Schema lookup uses three cache layers:
+# - Dataclass instance (and context) -> schema, possibly with member checks.
+# - Dataclass type -> field names and Final flags.
+# - Dataclass type and inferred member types -> schema.
+#
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
 _schema_by_dataclass_instance_and_context: WeakIdentityCache[
     dict[InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks]
