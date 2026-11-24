@@ -25,7 +25,9 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
-from quadrants.lang._runtime_typing.runtime_dataclass_guards import FrozenSchemaEntry
+from quadrants.lang._runtime_typing.runtime_dataclass_guards import (
+    SchemaNeedingMemberChecks,
+)
 from quadrants.lang._runtime_typing.types import (
     DataclassInstance,
     DeferredMemberType,
@@ -57,7 +59,7 @@ if TYPE_CHECKING:
 
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
 _schema_by_dataclass_instance_and_context: WeakIdentityCache[
-    dict[InferenceContextKey, type[RuntimeDataclassSchema] | FrozenSchemaEntry]
+    dict[InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks]
 ] = WeakIdentityCache()
 
 # These caches retain dataclass classes, assuming applications define relatively few of them.
@@ -174,7 +176,7 @@ def cached_infer_dataclass_schema(
     )
     schema_by_context = _schema_by_dataclass_instance_and_context.get(dataclass_instance)
     cached_schema = schema_by_context.get(inference_context_key) if schema_by_context is not None else None
-    if isinstance(cached_schema, FrozenSchemaEntry):
+    if isinstance(cached_schema, SchemaNeedingMemberChecks):
         if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
             return cached_schema.schema
     elif cached_schema is not None:
@@ -280,7 +282,7 @@ def cached_infer_dataclass_schema(
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
         schema_by_context[inference_context_key] = (
-            schema if stable else FrozenSchemaEntry(dataclass_instance, schema, field_plan, member_types)
+            schema if stable else SchemaNeedingMemberChecks(dataclass_instance, schema, field_plan, member_types)
         )
     return schema
 

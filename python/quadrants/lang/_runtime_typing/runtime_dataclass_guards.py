@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     )
 
 
-class FrozenSchemaEntry:
+class SchemaNeedingMemberChecks:
     """Store member names and types, never child objects that could retain the owning dataclass."""
 
     __slots__ = ("schema", "member_guards")
