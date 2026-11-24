@@ -9,7 +9,7 @@ import copy
 import dataclasses
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, TypeAlias, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -27,6 +27,13 @@ from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
 from quadrants.lang._runtime_typing.runtime_dataclass_guards import FrozenSchemaEntry
+from quadrants.lang._runtime_typing.types import (
+    DataclassInstance,
+    FinalValueKeyCache,
+    InferenceContextKey,
+    InferredMemberType,
+    RuntimeDataclassSchema,
+)
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
@@ -48,34 +55,7 @@ if TYPE_CHECKING:
     from quadrants.lang.kernel import Kernel
 
 
-class DataclassInstance(Protocol):
-    """Describe the field metadata shared by Python dataclass instances."""
-
-    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
-
-
-class RuntimeDataclassSchema(DataclassInstance, Protocol):
-    """Describe generated schema metadata inferred from an arriving dataclass instance."""
-
-    # Original dataclass class described by this generated schema.
-    _qd_underlying_dataclass: ClassVar[type[DataclassInstance]]
-    # Inferred member types can be reused without guards; frozen=True on the original class alone is insufficient.
-    _qd_frozen: ClassVar[bool]
-    # This schema or a nested schema contains errors raised only if compilation uses the affected members.
-    _qd_has_deferred_errors: ClassVar[bool]
-    # Original class identity and ordered member type signatures, used to select a compiled kernel.
-    _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
-
-
-# Object identity maps to the retained object and its type-tagged Final specialization key.
-FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
-
-InferredMemberType: TypeAlias = (
-    type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
-)
-
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
-InferenceContextKey: TypeAlias = tuple[int, int, int, str | None]
 _schema_by_context_by_instance: WeakIdentityCache[
     dict[InferenceContextKey, type[RuntimeDataclassSchema] | FrozenSchemaEntry]
 ] = WeakIdentityCache()

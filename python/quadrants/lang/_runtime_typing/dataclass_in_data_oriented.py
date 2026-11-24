@@ -3,10 +3,8 @@
 from typing import Any
 
 from quadrants import _warnings
-from quadrants.lang._runtime_typing.runtime_dataclass import (
-    RuntimeDataclassSchema,
-    cached_infer_dataclass_schema,
-)
+from quadrants.lang._runtime_typing.runtime_dataclass import cached_infer_dataclass_schema
+from quadrants.lang._runtime_typing.types import RuntimeDataclassSchema
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.kernel_arguments import ArgMetadata
