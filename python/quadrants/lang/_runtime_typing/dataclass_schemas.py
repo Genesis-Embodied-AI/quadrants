@@ -226,16 +226,18 @@ def cached_infer_dataclass_schema(
     # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
     # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
     numeric_defaults_and_ancestor_path = (id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
-    cached_schema = (
+    cached_schema_entry = (
         schema_by_numeric_defaults_and_ancestor_path.get(numeric_defaults_and_ancestor_path)
         if schema_by_numeric_defaults_and_ancestor_path is not None
         else None
     )
-    if cached_schema is not None and not isinstance(cached_schema, SchemaNeedingMemberChecks):
-        return cached_schema
+    if cached_schema_entry is not None and not isinstance(cached_schema_entry, SchemaNeedingMemberChecks):
+        return cached_schema_entry
 
-    if cached_schema is not None and cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
-        return cached_schema.schema
+    if cached_schema_entry is not None and cached_schema_entry.matches(
+        dataclass_instance, path, ancestor_ids, infer_member_type
+    ):
+        return cached_schema_entry.schema
 
     plan = _field_names_and_final_by_dataclass_type.get(id(dataclass_type))
     if plan is None:
