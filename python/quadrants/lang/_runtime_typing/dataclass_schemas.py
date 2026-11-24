@@ -281,9 +281,10 @@ def _infer_dataclass_runtime_member_types(
                 member, f"{path}.{name}", ancestor_ids, member_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             needs_member_check |= _needs_member_check
-        has_deferred_error |= isinstance(member_type, DeferredMemberType) or getattr(
-            member_type, "_qd_has_deferred_errors", False
-        )
+        if isinstance(member_type, DeferredMemberType):
+            has_deferred_error = True
+        elif is_runtime_dataclass_schema(member_type):
+            has_deferred_error |= member_type._qd_has_deferred_errors
         member_types.append(member_type)
     # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
     needs_member_check |= has_deferred_error
