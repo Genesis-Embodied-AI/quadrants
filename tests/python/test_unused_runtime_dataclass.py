@@ -316,7 +316,7 @@ def test_unused_member_in_captured_dataclass() -> None:
 def test_deferred_runtime_type_debug_cache_isolation(debug_settings: tuple[bool, ...], member_kind: str) -> None:
     from typing import Final
 
-    from quadrants.lang._runtime_typing.runtime_dataclass import (
+    from quadrants.lang._runtime_typing.dataclass_schemas import (
         cached_infer_dataclass_schema,
     )
 
@@ -371,7 +371,7 @@ def test_deferred_debug_type_names_do_not_retain_application_class() -> None:
     import gc
     import weakref
 
-    from quadrants.lang._runtime_typing.runtime_dataclass import (
+    from quadrants.lang._runtime_typing.dataclass_schemas import (
         cached_infer_dataclass_schema,
     )
 

@@ -4771,7 +4771,7 @@ def test_offline_dataclass_repr_does_not_modify_instance() -> None:
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
-    from quadrants.lang._runtime_typing.runtime_dataclass import (
+    from quadrants.lang._runtime_typing.dataclass_schemas import (
         cached_infer_dataclass_schema,
     )
 
@@ -4802,7 +4802,7 @@ def test_final_str_field_does_not_disable_offline_fastcache():
     from typing import Final
 
     from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
-    from quadrants.lang._runtime_typing.runtime_dataclass import (
+    from quadrants.lang._runtime_typing.dataclass_schemas import (
         cached_infer_dataclass_schema,
     )
 
@@ -4830,7 +4830,7 @@ def test_subclass_extra_field_offline_fastcache_uses_runtime_schema() -> None:
         dataclass_to_repr,
     )
     from quadrants.lang._name_utils import create_flat_name
-    from quadrants.lang._runtime_typing.runtime_dataclass import (
+    from quadrants.lang._runtime_typing.dataclass_schemas import (
         cached_infer_dataclass_schema,
     )
 

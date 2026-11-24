@@ -7,7 +7,7 @@ import pytest
 import quadrants as qd
 from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
-from quadrants.lang._runtime_typing.runtime_dataclass import (
+from quadrants.lang._runtime_typing.dataclass_schemas import (
     cached_infer_dataclass_schema,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata

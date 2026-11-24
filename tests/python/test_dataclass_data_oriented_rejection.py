@@ -4,7 +4,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching.args_hasher import _FAIL_FASTCACHE, dataclass_to_repr
-from quadrants.lang._runtime_typing.runtime_dataclass import (
+from quadrants.lang._runtime_typing.dataclass_schemas import (
     cached_infer_dataclass_schema,
 )
 

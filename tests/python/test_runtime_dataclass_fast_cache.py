@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import pytest
 
 import quadrants as qd
-from quadrants.lang._runtime_typing import runtime_dataclass as _runtime_dataclass
+from quadrants.lang._runtime_typing import dataclass_schemas
 
 from tests.helpers import test_utils
 
@@ -33,7 +33,7 @@ def test_frozen_tensor_reuses_metadata_in_both_kernels(monkeypatch: pytest.Monke
     def reject_inference(*args: object, **kwargs: object) -> typing.NoReturn:
         raise AssertionError("unchanged arguments should reuse inferred metadata")
 
-    monkeypatch.setattr(_runtime_dataclass, "infer_kernel_dataclass_arg_types", reject_inference)
+    monkeypatch.setattr(dataclass_schemas, "infer_kernel_dataclass_arg_types", reject_inference)
     first[0] = 9
     assert read(state) == 9
     assert twice(state) == 18
