@@ -42,8 +42,6 @@ g_repr_time = 0
 g_num_ignored_calls = 0
 
 
-FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
-
 _DC_REPR_NONE = object()
 
 # arg_meta used when walking the children of a ``@qd.data_oriented(template_primitives=False)`` object. Its annotation
@@ -292,10 +290,7 @@ def dataclass_to_repr(
             return _FAIL_FASTCACHE
         if id(field.type) in primitive_types.type_ids:
             _repr = f"{field.type}:{_repr}"
-        full_repr = f"{field.name}: ({_repr})"
-        if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
-            full_repr += f" = {child_value}"
-        repr_l.append(full_repr)
+        repr_l.append(f"{field.name}: ({_repr})")
     result = "[" + ",".join(repr_l) + "]"
     if cacheable:
         try:
