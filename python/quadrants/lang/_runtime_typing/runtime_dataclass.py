@@ -57,10 +57,13 @@ class DataclassInstance(Protocol):
 class RuntimeDataclassSchema(DataclassInstance, Protocol):
     """Describe generated schema metadata inferred from an arriving dataclass instance."""
 
+    # Original dataclass class described by this generated schema.
     _qd_underlying_dataclass: ClassVar[type[DataclassInstance]]
     # Inferred member types can be reused without guards; frozen=True on the original class alone is insufficient.
     _qd_frozen: ClassVar[bool]
+    # This schema or a nested schema contains errors raised only if compilation uses the affected members.
     _qd_has_deferred_errors: ClassVar[bool]
+    # Original class identity and ordered member type signatures, used to select a compiled kernel.
     _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
 
