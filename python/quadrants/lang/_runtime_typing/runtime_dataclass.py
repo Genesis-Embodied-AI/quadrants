@@ -166,7 +166,6 @@ def cached_infer_dataclass_schema(
     # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
     # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
     inference_context_key = (
-        id(dataclass_type),
         id(runtime.default_ip),
         id(runtime.default_fp),
         non_frozen_ancestor_path,
