@@ -107,7 +107,7 @@ _schema_by_dataclass_type_and_member_types: dict[
     tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]
 ] = {}
 # Source classes, ordered field names and Final flags, and whether any fields are Final.
-_field_names_and_final_by_dataclass_type: dict[int, tuple[type, tuple[tuple[str, bool], ...], bool]] = {}
+_field_names_and_finality_by_dataclass_type: dict[int, tuple[type, tuple[tuple[str, bool], ...], bool]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
 _matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
 # Inferred struct type descriptions, keyed by ordered member names and type identities.
@@ -239,7 +239,7 @@ def cached_infer_dataclass_schema(
     ):
         return cached_schema_entry.schema
 
-    _, field_names_and_final, has_final_fields = _field_names_and_final_by_dataclass_type.get(
+    _, field_names_and_final, has_final_fields = _field_names_and_finality_by_dataclass_type.get(
         id(dataclass_type), (None, None, False)
     )
     if field_names_and_final is None:
@@ -248,7 +248,7 @@ def cached_infer_dataclass_schema(
             for field in dataclasses.fields(dataclass_type)
         )
         has_final_fields = any(is_final for _, is_final in field_names_and_final)
-        _field_names_and_final_by_dataclass_type[id(dataclass_type)] = (
+        _field_names_and_finality_by_dataclass_type[id(dataclass_type)] = (
             dataclass_type,
             field_names_and_final,
             has_final_fields,
