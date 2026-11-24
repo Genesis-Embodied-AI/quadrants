@@ -153,54 +153,68 @@ def infer_member_type(
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
-) -> InferredMemberType | DeferredMemberType:
-    """Infer a member type from its value, or defer an unsupported-value error until the member is used."""
+) -> tuple[InferredMemberType | DeferredMemberType, bool]:
+    """Infer a member type and whether it needs checking before schema reuse."""
     # FIXME: Generalize runtime type inference to all kernel arguments, not just dataclass members.
     if isinstance(py_obj, Tensor):
-        py_obj = py_obj._unwrap()
+        member_type, _ = infer_member_type(
+            py_obj._unwrap(), path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
+        )
+        if is_runtime_dataclass_schema(member_type):
+            return member_type, member_type._qd_needs_member_check
+
+        return member_type, type(py_obj) not in _TENSOR_WRAPPER_TYPES
+
     if hasattr(type(py_obj), "__dataclass_fields__"):
-        return cached_infer_dataclass_schema(
+        schema = cached_infer_dataclass_schema(
             py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
         )
+        return schema, schema._qd_needs_member_check
 
     if is_data_oriented(py_obj):
-        return create_deferred_member_type_for_invalid_dataclass_member(
-            QuadrantsRuntimeTypeError,
-            "Data-oriented objects inside Python dataclass fields are unsupported. "
-            "Store the dataclass on the data-oriented object instead.",
-            py_obj,
+        return (
+            create_deferred_member_type_for_invalid_dataclass_member(
+                QuadrantsRuntimeTypeError,
+                "Data-oriented objects inside Python dataclass fields are unsupported. "
+                "Store the dataclass on the data-oriented object instead.",
+                py_obj,
+            ),
+            True,
         )
 
     if py_obj is None:
-        return Tensor
+        return Tensor, False
 
     if isinstance(py_obj, Field):
-        return Tensor
+        return Tensor, False
 
-    if isinstance(py_obj, (Ndarray, AnyArray, np.ndarray)):
-        return _array_annotation
+    if isinstance(py_obj, Ndarray):
+        return _array_annotation, False
+
+    if isinstance(py_obj, (AnyArray, np.ndarray)):
+        return _array_annotation, True
 
     # Avoid importing torch on the inference path when it is not already in use.
     import sys  # pylint: disable=import-outside-toplevel
 
     torch = sys.modules.get("torch")
     if torch is not None and isinstance(py_obj, torch.Tensor):
-        return _array_annotation
+        return _array_annotation, True
 
     if isinstance(py_obj, BufferView):
-        return _buffer_annotation
+        return _buffer_annotation, True
 
     if isinstance(py_obj, (bool, np.bool_)):
-        return primitive_types.u1
+        return primitive_types.u1, False
 
     if isinstance(py_obj, np.generic):
-        return to_quadrants_type(py_obj.dtype)
+        return to_quadrants_type(py_obj.dtype), False
 
     if isinstance(py_obj, int):
-        return impl.get_runtime().default_ip
+        return impl.get_runtime().default_ip, False
 
     if isinstance(py_obj, float):
-        return impl.get_runtime().default_fp
+        return impl.get_runtime().default_fp, False
 
     if isinstance(py_obj, Matrix):
         dtype = to_quadrants_type(np.asarray(py_obj.to_numpy()).dtype)
@@ -209,21 +223,24 @@ def infer_member_type(
             _matrix_types[key] = (
                 VectorType(py_obj.n, dtype) if py_obj.ndim == 1 else MatrixType(py_obj.n, py_obj.m, py_obj.ndim, dtype)
             )
-        return _matrix_types[key]
+        return _matrix_types[key], True
 
     if isinstance(py_obj, Struct):
         declared = getattr(py_obj, "_qd_struct_type", None)
         if declared is not None:
-            return declared
+            return declared, True
 
-        members = {name: infer_member_type(child, f"{path}.{name}", ancestor_ids) for name, child in py_obj.items}
+        members = {name: infer_member_type(child, f"{path}.{name}", ancestor_ids)[0] for name, child in py_obj.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
-        return _struct_types[key]
+        return _struct_types[key], True
 
-    return create_deferred_member_type_for_invalid_dataclass_member(
-        QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}", py_obj
+    return (
+        create_deferred_member_type_for_invalid_dataclass_member(
+            QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}", py_obj
+        ),
+        True,
     )
 
 
@@ -260,17 +277,10 @@ def _infer_dataclass_runtime_member_types(
                 child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
             elif non_frozen_ancestor_path is not None:
                 child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
-            member_type = infer_member_type(
+            member_type, child_needs_member_check = infer_member_type(
                 child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
-            if is_runtime_dataclass_schema(member_type):
-                needs_member_check |= member_type._qd_needs_member_check
-            elif (
-                child is not None
-                and type(child) not in _TENSOR_WRAPPER_TYPES
-                and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
-            ):
-                needs_member_check = True
+            needs_member_check |= child_needs_member_check
         has_deferred_error |= isinstance(member_type, DeferredMemberType) or getattr(
             member_type, "_qd_has_deferred_errors", False
         )

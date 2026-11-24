@@ -2,12 +2,14 @@ import gc
 import weakref
 from dataclasses import dataclass
 
+import numpy as np
 import pytest
 
 import quadrants as qd
 from quadrants.lang._runtime_typing.dataclass_schemas import (
     _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path,
     cached_infer_dataclass_schema,
+    infer_member_type,
 )
 
 from tests.helpers import test_utils
@@ -57,3 +59,35 @@ def test_guard_cache_does_not_retain_parent_through_child() -> None:
     gc.collect()
     assert ref() is None
     assert key_id not in _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path._entries
+
+
+@test_utils.test(arch=qd.cpu)
+def test_inferred_member_check_requirements() -> None:
+    """Inference distinguishes immutable values, mutable contents, and fixed Tensor backing objects."""
+
+    @dataclass(frozen=True)
+    class Frozen:
+        value: object
+
+    @dataclass
+    class Mutable:
+        value: object
+
+    tensor = qd.tensor(qd.f32, shape=2, backend=qd.Backend.NDARRAY)
+    for py_obj, expected in (
+        (None, False),
+        (1, False),
+        (1.0, False),
+        (np.int32(1), False),
+        (np.zeros(2), True),
+        (tensor, False),
+        (tensor._unwrap(), False),
+        (qd.Vector([1, 2]), True),
+        (qd.Struct(value=1), True),
+        (Frozen(1), False),
+        (Mutable(1), True),
+        (Frozen(Mutable(1)), True),
+        ([], True),
+    ):
+        _, needs_member_check = infer_member_type(py_obj, "state.value", frozenset())
+        assert needs_member_check is expected, type(py_obj)

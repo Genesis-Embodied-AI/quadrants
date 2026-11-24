@@ -54,11 +54,12 @@ class SchemaNeedingMemberChecks:
         dataclass_instance: "DataclassInstance",
         path: str,
         ancestor_ids: frozenset[int],
-        infer_member_type: "Callable[[Any, str, frozenset[int]], InferredMemberType | DeferredMemberType]",
+        infer_member_type: "Callable[[Any, str, frozenset[int]], tuple[InferredMemberType | DeferredMemberType, bool]]",
     ) -> bool:
         """Check whether the current member types still match the cached schema."""
         for name, member_type in self.member_guards:
             child = getattr(dataclass_instance, name)
-            if infer_member_type(child, f"{path}.{name}", ancestor_ids) is not member_type:
+            current_member_type, _ = infer_member_type(child, f"{path}.{name}", ancestor_ids)
+            if current_member_type is not member_type:
                 return False
         return True
