@@ -154,7 +154,11 @@ def infer_member_type(
     non_frozen_ancestor_path: str | None = None,
     final_value_key_by_value_id: FinalValueKeyCache | None = None,
 ) -> tuple[InferredMemberType | DeferredMemberType, bool]:
-    """Infer a member type and whether it needs checking before schema reuse."""
+    """Return (member_type, needs_member_check) inferred from the arriving value.
+
+    member_type is an inferred type or a DeferredMemberType describing an unsupported value. needs_member_check
+    indicates whether the member must be rechecked before reusing its containing dataclass's schema.
+    """
     # FIXME: Generalize runtime type inference to all kernel arguments, not just dataclass members.
     if isinstance(py_obj, Tensor):
         member_type, _ = infer_member_type(
