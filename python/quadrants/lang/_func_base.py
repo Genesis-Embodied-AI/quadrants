@@ -629,7 +629,7 @@ class FuncBase:
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
         # We get the fields from the needed arg type, thus subclasses are allowed
         if needed_arg_fields is not None:
-            expected_type = getattr(needed_arg_type, "_qd_runtime_origin", needed_arg_type)
+            expected_type = getattr(needed_arg_type, "_qd_runtime_underlying_dataclass", needed_arg_type)
             if provided_arg_type is not expected_type and not issubclass(provided_arg_type, expected_type):
                 # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
                 raise QuadrantsRuntimeTypeError(
@@ -644,7 +644,7 @@ class FuncBase:
                 is_frozen = params is not None and (params.frozen or params.unsafe_hash)
             # Runtime schemas can contain mutable children even when the outer dataclass is frozen. Re-read their
             # leaves on each launch; instance identity alone cannot validate a cached launch buffer.
-            if hasattr(needed_arg_type, "_qd_runtime_origin") and not needed_arg_type._qd_runtime_stable:
+            if hasattr(needed_arg_type, "_qd_runtime_underlying_dataclass") and not needed_arg_type._qd_runtime_frozen:
                 is_frozen = False
             idx = 0
             if is_frozen:

@@ -392,7 +392,7 @@ class FunctionDefTransformer:
             anno = arg_meta.annotation
             is_template = anno is annotations.template or isinstance(anno, annotations.template)
             is_tensor_anno = anno is _TensorClass
-            if hasattr(anno, "_qd_runtime_origin"):
+            if hasattr(anno, "_qd_runtime_underlying_dataclass"):
                 continue
             if not (is_template or is_tensor_anno):
                 continue
@@ -435,9 +435,9 @@ class FunctionDefTransformer:
             return None
 
         if dataclasses.is_dataclass(argument_type):
-            if not isinstance(data, getattr(argument_type, "_qd_runtime_origin", argument_type)):
+            if not isinstance(data, getattr(argument_type, "_qd_runtime_underlying_dataclass", argument_type)):
                 raise QuadrantsSyntaxError(f"Argument {argument_name!r} requires {argument_type.__name__}")
-            if hasattr(argument_type, "_qd_runtime_origin"):
+            if hasattr(argument_type, "_qd_runtime_underlying_dataclass"):
                 register_runtime_dataclass_schema(
                     ctx.kernel_compile_context.current_pass, data, argument_type, argument_name
                 )

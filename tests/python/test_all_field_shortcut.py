@@ -25,7 +25,7 @@ from tests.helpers import test_utils
 def _cached_all_field(obj, annotated):
     """Read the ``_qd_all_field`` verdict for ``annotated`` (identity-guarded), or None if absent."""
     for schema, verdict in getattr(obj, "_qd_all_field", {}).values():
-        if getattr(schema, "_qd_runtime_origin", schema) is annotated:
+        if getattr(schema, "_qd_runtime_underlying_dataclass", schema) is annotated:
             return verdict
     return None
 

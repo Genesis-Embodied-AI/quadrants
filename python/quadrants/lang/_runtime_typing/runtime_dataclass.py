@@ -57,8 +57,9 @@ class DataclassInstance(Protocol):
 class RuntimeDataclassSchema(DataclassInstance, Protocol):
     """Describe generated schema metadata inferred from an arriving dataclass instance."""
 
-    _qd_runtime_origin: ClassVar[type[DataclassInstance]]
-    _qd_runtime_stable: ClassVar[bool]
+    _qd_runtime_underlying_dataclass: ClassVar[type[DataclassInstance]]
+    # Inferred member types can be reused without guards; frozen=True on the original class alone is insufficient.
+    _qd_runtime_frozen: ClassVar[bool]
     _qd_runtime_has_deferred: ClassVar[bool]
     _qd_runtime_key: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
@@ -226,7 +227,7 @@ def cached_infer_dataclass_schema(
                 child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             if dataclasses.is_dataclass(member_type):
-                stable &= getattr(member_type, "_qd_runtime_stable")
+                stable &= getattr(member_type, "_qd_runtime_frozen")
             elif (
                 child is not None
                 and type(child) not in _TENSOR_WRAPPER_TYPES
@@ -266,8 +267,8 @@ def cached_infer_dataclass_schema(
                     "__dataclass_fields__": fields,
                     "__dataclass_params__": params,
                     "__hash__": dataclass_type.__hash__,
-                    "_qd_runtime_origin": dataclass_type,
-                    "_qd_runtime_stable": stable,
+                    "_qd_runtime_underlying_dataclass": dataclass_type,
+                    "_qd_runtime_frozen": stable,
                     "_qd_runtime_has_deferred": has_deferred,
                     # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                     # must share a specialization.
@@ -352,14 +353,14 @@ def prepare_kernel_dataclass_args_for_mapper(
     unstable = False
     for meta in kernel.arg_metas:
         schema = meta.annotation
-        if hasattr(schema, "_qd_runtime_origin"):
+        if hasattr(schema, "_qd_runtime_underlying_dataclass"):
             has_deferred |= schema._qd_runtime_has_deferred
-            unstable |= not schema._qd_runtime_stable
+            unstable |= not schema._qd_runtime_frozen
     kernel._runtime_has_deferred = has_deferred
     kernel.template_slot_locations = [
         i
         for i in kernel.original_template_slot_locations
-        if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_origin")
+        if not hasattr(kernel.arg_metas[i].annotation, "_qd_runtime_underlying_dataclass")
     ]
     kernel.mapper.template_slot_locations = kernel.template_slot_locations
     # A dataclass's member types can change without changing the identity of the outer object.
@@ -393,7 +394,7 @@ def dataclass_call_arguments(
                 )
             continue
         py_obj = py_objs[meta.name]
-        if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_origin"):
+        if isinstance(py_obj, type) and hasattr(py_obj, "_qd_runtime_underlying_dataclass"):
             schema = py_obj
         elif hasattr(type(py_obj), "__dataclass_fields__"):
             schema = cached_infer_dataclass_schema(cast(DataclassInstance, py_obj), meta.name)
