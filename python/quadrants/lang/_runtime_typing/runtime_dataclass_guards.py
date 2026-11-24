@@ -1,5 +1,6 @@
 """Validate mutable descendants before reusing a frozen dataclass's inferred schema."""
 
+import sys
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
@@ -35,6 +36,7 @@ class SchemaNeedingMemberChecks:
         """Record guards for members whose runtime representation can change inside a frozen dataclass."""
         self.schema = schema
         self.member_guards = []
+        torch = sys.modules.get("torch")
         for (name, is_final), member_type in zip(field_names_and_final, member_types):
             if is_final:
                 # Final values are still validated by specialization and launch handling; their declared type is fixed.
@@ -46,6 +48,8 @@ class SchemaNeedingMemberChecks:
                 if not cast("type[RuntimeDataclassSchema]", member_type)._qd_needs_member_check:
                     continue
             elif child is None or isinstance(child, (bool, int, float, np.generic, np.ndarray, Ndarray, Field)):
+                continue
+            if torch is not None and isinstance(child, torch.Tensor):
                 continue
             self.member_guards.append((name, member_type))
 

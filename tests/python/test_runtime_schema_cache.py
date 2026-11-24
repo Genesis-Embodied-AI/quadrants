@@ -105,8 +105,9 @@ def test_inferred_member_check_requirements() -> None:
         assert needs_member_check is expected, type(py_obj)
 
 
+@pytest.mark.parametrize("backend", ["numpy", "torch"])
 @test_utils.test(arch=qd.cpu)
-def test_numpy_members_do_not_need_schema_checks() -> None:
+def test_array_members_do_not_need_schema_checks(backend: str) -> None:
     """Array metadata changes preserve its schema type, including inside guarded containers."""
 
     @dataclass
@@ -118,12 +119,21 @@ def test_numpy_members_do_not_need_schema_checks() -> None:
         array: object
         other: object
 
-    array = np.zeros(4, dtype=np.float32)
+    if backend == "torch":
+        torch = pytest.importorskip("torch")
+        array = torch.zeros(4)
+    else:
+        array = np.zeros(4, dtype=np.float32)
+    _, needs_member_check = infer_member_type(array, "state.array", frozenset())
+    assert not needs_member_check
     state = State(array, None)
     schema = cached_infer_dataclass_schema(state, "state")
     assert not schema._qd_needs_member_check
-    array.shape = (2, 2)
-    array.dtype = np.int32
+    if backend == "torch":
+        array.resize_(2, 2)
+    else:
+        array.shape = (2, 2)
+        array.dtype = np.int32
     assert cached_infer_dataclass_schema(state, "state") is schema
 
     guarded = State(array, Mutable(1))

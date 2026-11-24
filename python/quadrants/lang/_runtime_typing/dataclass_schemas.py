@@ -205,7 +205,7 @@ def infer_member_type(
 
     torch = sys.modules.get("torch")
     if torch is not None and isinstance(py_obj, torch.Tensor):
-        return _array_annotation, True
+        return _array_annotation, False
 
     if isinstance(py_obj, BufferView):
         return _buffer_annotation, True
