@@ -29,13 +29,13 @@ class SchemaNeedingMemberChecks:
         self,
         value: "DataclassInstance",
         schema: "type[RuntimeDataclassSchema]",
-        field_plan: Sequence[tuple[str, bool]],
+        field_names_and_final: Sequence[tuple[str, bool]],
         member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
     ) -> None:
         """Record guards for members whose runtime representation can change inside a frozen dataclass."""
         self.schema = schema
         self.member_guards = []
-        for (name, is_final), member_type in zip(field_plan, member_types):
+        for (name, is_final), member_type in zip(field_names_and_final, member_types):
             if is_final:
                 # Final values are still validated by specialization and launch handling; their declared type is fixed.
                 continue

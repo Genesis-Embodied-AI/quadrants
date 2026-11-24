@@ -69,7 +69,7 @@ _schema_by_dataclass_type_and_member_types: dict[
     tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]
 ] = {}
 # Source classes, ordered field names and Final flags, and whether any fields are Final.
-_field_plans: dict[int, tuple[type, tuple[tuple[str, bool], ...], bool]] = {}
+_field_names_and_final_by_dataclass_type: dict[int, tuple[type, tuple[tuple[str, bool], ...], bool]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
 _matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
 # Inferred struct type descriptions, keyed by ordered member names and type identities.
@@ -181,16 +181,16 @@ def cached_infer_dataclass_schema(
             return cached_schema.schema
     elif cached_schema is not None:
         return cached_schema
-    plan = _field_plans.get(id(dataclass_type))
+    plan = _field_names_and_final_by_dataclass_type.get(id(dataclass_type))
     if plan is None:
-        field_plan = tuple(
+        field_names_and_final = tuple(
             (field.name, dataclass_field_is_final(dataclass_type, field.name, field.type))
             for field in dataclasses.fields(dataclass_type)
         )
-        has_final_fields = any(is_final for _, is_final in field_plan)
-        plan = (dataclass_type, field_plan, has_final_fields)
-        _field_plans[id(dataclass_type)] = plan
-    _, field_plan, has_final_fields = plan
+        has_final_fields = any(is_final for _, is_final in field_names_and_final)
+        plan = (dataclass_type, field_names_and_final, has_final_fields)
+        _field_names_and_final_by_dataclass_type[id(dataclass_type)] = plan
+    _, field_names_and_final, has_final_fields = plan
     params = getattr(dataclass_type, "__dataclass_params__")
     container_prevents_rebinding = params.frozen or params.unsafe_hash
     final_non_frozen_path = non_frozen_ancestor_path
@@ -199,7 +199,7 @@ def cached_infer_dataclass_schema(
     stable = params.frozen and not has_final_fields
     member_types = []
     has_deferred = False
-    for name, is_final in field_plan:
+    for name, is_final in field_names_and_final:
         if is_final:
             member_type = infer_final_field_annotation(
                 getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
@@ -231,14 +231,14 @@ def cached_infer_dataclass_schema(
     key = (
         id(dataclass_type),
         stable,
-        tuple((name, id(member_type)) for (name, _), member_type in zip(field_plan, member_types)),
+        tuple((name, id(member_type)) for (name, _), member_type in zip(field_names_and_final, member_types)),
     )
     schema = _schema_by_dataclass_type_and_member_types.get(key)
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
         # The class plan retains the dataclass_type and field order; only runtime member types and stability vary here.
         fields = {}
-        for (name, _), member_type in zip(field_plan, member_types):
+        for (name, _), member_type in zip(field_names_and_final, member_types):
             resolved = dataclasses.field(metadata=dataclass_type.__dataclass_fields__[name].metadata)
             resolved.name = name
             resolved.type = member_type
@@ -286,7 +286,9 @@ def cached_infer_dataclass_schema(
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
         schema_by_context[inference_context_key] = (
-            schema if stable else SchemaNeedingMemberChecks(dataclass_instance, schema, field_plan, member_types)
+            schema
+            if stable
+            else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
         )
     return schema
 
