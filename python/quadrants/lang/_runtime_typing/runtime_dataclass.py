@@ -16,9 +16,9 @@ import numpy as np
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
 from quadrants.lang import impl
+from quadrants.lang._final.final_annotation import dataclass_field_is_final
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
-    get_final_field_names,
     infer_final_field_annotation,
 )
 from quadrants.lang._ndarray import Ndarray
@@ -183,12 +183,12 @@ def cached_infer_dataclass_schema(
         return cached_schema
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
-        finals = get_final_field_names(dataclass_type)
-        plan = (
-            dataclass_type,
-            tuple((field.name, field, field.name in finals) for field in dataclasses.fields(dataclass_type)),
-            bool(finals),
+        field_plan = tuple(
+            (field.name, field, dataclass_field_is_final(dataclass_type, field.name, field.type))
+            for field in dataclasses.fields(dataclass_type)
         )
+        has_final_fields = any(is_final for _, _, is_final in field_plan)
+        plan = (dataclass_type, field_plan, has_final_fields)
         _field_plans[id(dataclass_type)] = plan
     _, field_plan, has_final_fields = plan
     params = getattr(dataclass_type, "__dataclass_params__")

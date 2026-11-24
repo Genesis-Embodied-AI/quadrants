@@ -39,26 +39,6 @@ if TYPE_CHECKING:
 # cast ignores that argument and never resolves the string, so the import is only needed for type checking.
 _FINAL_MARKER = typing.cast("_SpecialForm", typing.Final)
 
-# Class identity maps to the retained class and its Final field names.
-# This cache retains classes, assuming applications define relatively few dataclass types.
-_final_field_names_by_dataclass_type_id: dict[int, tuple[type, frozenset[str]]] = {}
-
-
-def get_final_field_names(dataclass_type: type) -> frozenset[str]:
-    """Find and cache the names of fields marked Final."""
-    cached_dataclass_type, cached_final_field_names = _final_field_names_by_dataclass_type_id.get(
-        id(dataclass_type), (None, None)
-    )
-    if cached_dataclass_type is dataclass_type and cached_final_field_names is not None:
-        return cached_final_field_names
-    names = frozenset(
-        field.name
-        for field in dataclasses.fields(dataclass_type)
-        if dataclass_field_is_final(dataclass_type, field.name, field.type)
-    )
-    _final_field_names_by_dataclass_type_id[id(dataclass_type)] = (dataclass_type, names)
-    return names
-
 
 def infer_final_field_annotation(
     py_obj: object,
