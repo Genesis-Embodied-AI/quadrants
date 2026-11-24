@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
+from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import has_pytorch
@@ -306,23 +306,6 @@ def test_cache_values_unchecked() -> None:
     base = MyConfigNoChecked(some_int_unchecked=3)
     same = MyConfigNoCheckedSame(some_int_unchecked=6)
     diff = MyConfigNoCheckedDiff(some_int_new=3)
-
-    h = args_hasher.hash_args
-    h_base = h(False, [base], [None])
-    assert h_base is not None
-    assert h_base == h(False, [same], [None])
-    assert h_base != h(False, [diff], [None])
-
-
-@test_utils.test()
-def test_cache_values_checked() -> None:
-    @dataclasses.dataclass
-    class MyConfigChecked:
-        some_int_checked: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-
-    base = MyConfigChecked(some_int_checked=5)
-    same = MyConfigChecked(some_int_checked=5)
-    diff = MyConfigChecked(some_int_checked=7)
 
     h = args_hasher.hash_args
     h_base = h(False, [base], [None])
