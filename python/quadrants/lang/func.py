@@ -26,7 +26,6 @@ from quadrants.types import (
 )
 from quadrants.types.enums import AutodiffMode
 
-from ._fast_caching import config_reads
 from ._func_base import FuncBase
 
 # Define proxy for fast lookup
@@ -72,16 +71,12 @@ class Func(FuncBase):
 
         assert current_kernel is not None
         assert kernel_compile_context is not None
-        if kernel_compile_context.helper_defaults is not None:
-            kernel_compile_context.helper_defaults.record(self)
         if self.is_real_function:
             if current_kernel.autodiff_mode != _NONE:
                 raise QuadrantsSyntaxError("Real function in gradient kernels unsupported.")
             instance_id, arg_features = self.mapper.lookup(impl.current_cfg().raise_on_templated_floats, py_args)
             key = FunctionKey(self.func.__name__, self.func_id, instance_id)
-            already_compiled = key.instance_id in self.compiled
-            config_reads.record_real_function(self.func_id, instance_id, already_compiled)
-            if not already_compiled:
+            if key.instance_id not in self.compiled:
                 self.do_compile(key=key, args=py_args, arg_features=arg_features)
             return self.func_call_rvalue(key=key, args=py_args)
         tree, ctx = self.get_tree_and_ctx(

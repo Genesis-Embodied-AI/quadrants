@@ -25,6 +25,7 @@ RET_SUCCESS = 42
 @pytest.mark.parametrize(
     "key,value",
     [
+        ("random_seed", 123),
         ("cpu_per_worker_min_block_dim", 1),
         ("cpu_fixed_block_dim", 16),
         ("cpu_work_scheduling", qd.CPUWorkScheduling.FIXED_SIZE),
@@ -34,7 +35,7 @@ RET_SUCCESS = 42
 def test_src_hasher_create_cache_key_vary_config(key, value) -> None:
     """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
 
-    A compiler option that can affect native code generation must remain in L1.
+    L1 is the level to test: config feeds only into it, and L2 just adds the args-narrow hash on top.
     """
 
     @qd.kernel

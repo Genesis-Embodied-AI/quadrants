@@ -7,13 +7,12 @@ Pruning information, already produced during compile, is exposed as a first-clas
 
   - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``): keyed by
     source+config only (no args). Stores ``PruningInfo`` - the set of kernel-accessed flat names (e.g.
-    ``__qd_state__qd_x``) plus the ``graph_do_while_levels`` table and the config fields read during compilation.
-    The flat-name set is the *union* over every specialization compiled so far, not the reads of one specialization - see "Pruning is
+    ``__qd_state__qd_x``) plus the ``graph_do_while_levels`` table (also a kernel-source property). The flat-name set
+    is the *union* over every specialization compiled so far, not the reads of one specialization - see "Pruning is
     per-specialization" below.
 
   - L2 (``make_full_cache_key`` + ``load_full`` / ``store_full``): keyed by L1 key + the *narrow* args hash computed
-    with pruning info from L1, and the current values of the config fields in L1. Stores the C++
-    ``frontend_cache_key`` that names the compiled artifact.
+    with pruning info from L1. Stores the C++ ``frontend_cache_key`` that names the compiled artifact.
 
 Lookup flow on a warm call: L1 lookup -> narrow args hash (paths from L1) -> L2 lookup -> load artifact.
 
@@ -53,15 +52,8 @@ from .._wrap_inspect import FunctionSourceInfo
 from ..kernel_arguments import ArgMetadata
 from . import args_hasher, config_hasher, function_hasher
 from .args_hasher import FastcacheSkip
-from .config_reads import ConfigField, ConfigReads, read_config_values
 from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
-from .helper_defaults import (
-    HelperDefaultReads,
-    HelperDefaults,
-    HelperPath,
-    read_helper_defaults,
-)
 from .python_side_cache import PythonSideCache
 
 # Mixed into L1 / L2 keys so the two levels cannot collide, and so single-level entries written by older Quadrants
@@ -70,7 +62,7 @@ _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
 # Bump when persisted schemas or compilation rules make older cache artifacts incompatible.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v15-helper-defaults"
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v16-random-seed-read"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
@@ -138,10 +130,10 @@ def _resolve_intenum_member(qualname: str | None, fallback: int | None) -> int |
     return fallback
 
 
-def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
+def make_source_config_key(kernel_source_info: FunctionSourceInfo, *, include_random_seed: bool = True) -> str:
     """Build the L1 cache key: source + config + version, with no dependence on args."""
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
-    config_hash = config_hasher.hash_compile_config()
+    config_hash = config_hasher.hash_compile_config(include_random_seed=include_random_seed)
     # In L1 rather than L2: caps change codegen without changing argument identity.
     device_caps_hash = config_hasher.hash_device_caps()
     return hash_iterable_strings(
@@ -160,17 +152,9 @@ def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
     )
 
 
-def make_full_cache_key(
-    source_config_key: str,
-    narrow_args_hash: str,
-    config_values: dict[ConfigField, str] | None = None,
-    helper_defaults: dict[HelperPath, HelperDefaults] | None = None,
-) -> str:
-    """Build the L2 key from the L1 key, narrow args hash, config values, and evaluated helper defaults."""
-    dependencies = json.dumps([sorted((config_values or {}).items()), sorted((helper_defaults or {}).items())])
-    return hash_iterable_strings(
-        (_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION, dependencies)
-    )
+def make_full_cache_key(source_config_key: str, narrow_args_hash: str) -> str:
+    """Build the L2 cache key from the L1 key + narrow args hash. See module docstring."""
+    return hash_iterable_strings((_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION))
 
 
 def compute_narrow_args_hash(
@@ -210,18 +194,12 @@ class L1CacheValue(BaseModel):
     entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner); see
     ``CacheValue`` for why the launch path needs the AST-resolved ``cond_cpp_arg_id``.
 
-    ``config_fields`` and ``helper_paths`` are unions from both compile passes and all known specializations.
-    L2 pairs the config fields with their current values and the helper paths with their evaluated defaults.
-    A key for a smaller set cannot find an artifact that requires extra dependencies.
-
     ``hashed_function_source_infos`` rejects an L1 hit when a helper's source changed, which the key itself cannot
     catch: ``kernel_hash`` covers only the entry point.
     """
 
     used_py_dataclass_parameters: set[str]
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
-    config_fields: set[ConfigField]
-    helper_paths: set[HelperPath]
     graph_do_while_levels: list[tuple[str, int, int]] | None = None
 
 
@@ -229,8 +207,6 @@ def store_pruning_info(
     source_config_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    config_fields: set[ConfigField],
-    helper_paths: set[HelperPath],
     graph_do_while_levels: list[tuple[str, int, int]] | None = None,
 ) -> None:
     """Persist the L1 entry, or re-persist it with a grown union. See ``L1CacheValue`` for what's stored / why."""
@@ -241,8 +217,6 @@ def store_pruning_info(
     cache_value = L1CacheValue(
         used_py_dataclass_parameters=used_py_dataclass_parameters,
         hashed_function_source_infos=list(hashed_function_source_infos),
-        config_fields=config_fields,
-        helper_paths=helper_paths,
         graph_do_while_levels=graph_do_while_levels,
     )
     cache.store(source_config_key, cache_value.model_dump_json())
@@ -255,61 +229,88 @@ def persist_l1_and_set_l2_key(
     used_py_dataclass_parameters: set[str] | None,
     visited_functions: Iterable[FunctionSourceInfo],
     graph_do_while_levels: list[tuple[str, int, int]] | None,
-    l1_entry: L1CacheValue | None,
-    config_reads: ConfigReads,
-    helper_reads: HelperDefaultReads,
+    pruning_paths_from_l1: set[str] | None,
+    fast_checksum: str | None,
     raise_on_templated_floats: bool,
     py_args: tuple[Any, ...],
     arg_metas: Sequence[ArgMetadata],
-) -> str | None:
-    """After a cold compile, update L1 and derive the L2 key from the complete read set."""
-    if not l1_key or kernel_source_info is None or used_py_dataclass_parameters is None or not config_reads.cacheable:
-        return None
-    if not helper_reads.cacheable:
-        return None
+) -> tuple[str | None, bool]:
+    """After a successful materialize, persist L1 (if missing or incomplete) and derive the L2 key.
+
+      1. L1 missing (``pruning_paths_from_l1 is None``): store the freshly-computed pruning info so the next call
+         from a new process can skip the args-walk warm-up.
+
+      2. L1 present but not listing every path this specialization reads: grow it to the union, and drop the L2 key
+         phase 2 derived from the smaller set - that key ignores paths this artifact depends on.
+
+      3. No ``fast_checksum`` at that point (L1 missing, dropped by 2., or phase 2 saw a FIELD-related
+         ``FastcacheSkip``): derive the L2 key from the path set L1 now holds.
+
+    Returns ``(new_fast_checksum, generated)``, where ``generated`` means the kernel had no L2 key on entry and now
+    has one (it drives the caller's cache-observations counter). Case 2. re-keys with ``generated`` False, so the
+    caller must assign ``new_fast_checksum`` either way. ``(None, False)`` means fastcache is inactive for this
+    kernel (``l1_key`` falsy / source info missing / used-params not recorded).
+    """
+    if not l1_key:
+        return None, False
+    if kernel_source_info is None:
+        return fast_checksum, False
+    if used_py_dataclass_parameters is None:
+        return fast_checksum, False
+    had_checksum = fast_checksum is not None
     key_paths = used_py_dataclass_parameters
-    config_fields = set(config_reads.values)
-    helper_paths = set(helper_reads.values)
-    if l1_entry is not None:
-        key_paths = l1_entry.used_py_dataclass_parameters | key_paths
-        config_fields |= l1_entry.config_fields
-        helper_paths |= l1_entry.helper_paths
-    defaults = read_helper_defaults(helper_reads.root, helper_paths)
-    if defaults is None or any(defaults[path] != value for path, value in helper_reads.values.items()):
-        return None
-    narrow_args_hash = compute_narrow_args_hash(
-        raise_on_templated_floats, kernel_source_info, py_args, arg_metas, key_paths
-    )
-    config_values = read_config_values(config_fields)
-    # Do not persist an artifact if a config value changed after Python read it.
-    if config_values is None or any(config_values[field] != value for field, value in config_reads.values.items()):
-        return None
-    if (
-        l1_entry is None
-        or key_paths != l1_entry.used_py_dataclass_parameters
-        or config_fields != l1_entry.config_fields
-        or helper_paths != l1_entry.helper_paths
-    ):
-        store_pruning_info(l1_key, visited_functions, key_paths, config_fields, helper_paths, graph_do_while_levels)
-    if narrow_args_hash is None:
-        return None
-    return make_full_cache_key(l1_key, narrow_args_hash, config_values, defaults)
+    if pruning_paths_from_l1 is None:
+        store_pruning_info(
+            l1_key,
+            visited_functions,
+            used_py_dataclass_parameters,
+            graph_do_while_levels=graph_do_while_levels,
+        )
+    elif used_py_dataclass_parameters <= pruning_paths_from_l1:
+        key_paths = pruning_paths_from_l1
+    else:
+        # Grow the shared entry so all specializations key on the same superset.
+        key_paths = pruning_paths_from_l1 | used_py_dataclass_parameters
+        store_pruning_info(
+            l1_key,
+            visited_functions,
+            key_paths,
+            graph_do_while_levels=graph_do_while_levels,
+        )
+        fast_checksum = None
+    if fast_checksum is None:
+        narrow_args_hash = compute_narrow_args_hash(
+            raise_on_templated_floats,
+            kernel_source_info,
+            py_args,
+            arg_metas,
+            key_paths,
+        )
+        if narrow_args_hash is not None:
+            return make_full_cache_key(l1_key, narrow_args_hash), not had_checksum
+    return fast_checksum, False
 
 
-def load_pruning_info(source_config_key: str) -> L1CacheValue | None:
-    """Look up the L1 entry, or return None on a miss or a changed helper source."""
+def load_pruning_info(
+    source_config_key: str,
+) -> tuple[set[str], list[tuple[str, int, int]] | None] | tuple[None, None]:
+    """Look up L1 cache. Returns (pruning_paths, graph_do_while_levels) on hit, (None, None) on miss.
+
+    A changed helper source invalidates the entry, which is reported as a miss so the caller cold-compiles and
+    overwrites it.
+    """
     cache = PythonSideCache()
     maybe_value_json = cache.try_load(source_config_key)
     if maybe_value_json is None:
-        return None
+        return None, None
     try:
         cache_value = L1CacheValue.model_validate_json(maybe_value_json)
     except (pydantic.ValidationError, json.JSONDecodeError, UnicodeDecodeError) as e:
         warnings.warn(f"Failed to parse L1 cache entry: {e}")
-        return None
+        return None, None
     if not function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
-        return None
-    return cache_value
+        return None, None
+    return cache_value.used_py_dataclass_parameters, cache_value.graph_do_while_levels
 
 
 class CacheValue(BaseModel):

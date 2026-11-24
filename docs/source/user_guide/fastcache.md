@@ -34,9 +34,7 @@ That's it. On the first call, the kernel compiles normally and the fastcache ent
 
 ### Runtime configuration
 
-`qd.random()` uses the seed of the current program, even on a fastcache hit. If a `@qd.func` helper declares `seed=qd.cfg.random_seed`, Python saves the seed when it defines the helper. Fastcache keys the evaluated default, so each seed can reuse its own entry. If fastcache cannot identify the helper or encode its defaults, it skips the entry.
-
-If Python code reads a program or default config field during kernel compilation, fastcache includes the field value in the key. If fastcache cannot identify the config object or track its reads, it skips the fastcache entry. For example, if another kernel already compiled a `@qd.real_func` body, the caller cannot observe its config reads. These rules do not change the native offline cache or the purity checks.
+`qd.random()` uses the current program's seed even on a fastcache hit. If Python does not read `random_seed`, fastcache can reuse a kernel across seeds. Once Python reads the seed, fastcache includes the current program's seed in its keys for the rest of the process. This includes reads in default arguments, in Python helpers, and during kernel compilation. A read in any thread applies to all kernels. The native offline cache key does not change.
 
 Fastcache requires the offline cache to be enabled (which it is by default). Two `qd.init` options are relevant:
 

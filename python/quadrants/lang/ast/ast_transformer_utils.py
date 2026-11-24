@@ -21,7 +21,6 @@ from quadrants.lang.exception import (
 )
 
 if TYPE_CHECKING:
-    from .._fast_caching.helper_defaults import HelperDefaultReads
     from .._func_base import FuncBase
     from .._pruning import Pruning
 
@@ -186,7 +185,6 @@ class KernelCompileContext:
         self.pruning: "Pruning" = pruning
         self.currently_compiling_materialize_key = currently_compiling_materialize_key
         self.current_pass: KernelCompilePassContext
-        self.helper_defaults: HelperDefaultReads | None = None
 
 
 class MemberBinding(NamedTuple):

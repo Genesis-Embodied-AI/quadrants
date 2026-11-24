@@ -266,22 +266,8 @@ class CallTransformer:
         current_pass.caller_in_non_static_control_flow = ctx.is_in_non_static_control_flow_including_caller()
         try:
             try:
-                helper_defaults = ctx.kernel_compile_context.helper_defaults
-                if helper_defaults is None:
-                    node.ptr = func(*py_args, **py_kwargs)
-                else:
-                    # Only an unshadowed global or closure name can be read on a cache hit.
-                    name = None
-                    if isinstance(node.func, ast.Name):
-                        candidate = node.func.id
-                        if (
-                            candidate not in ctx.template_vars
-                            and not ctx.is_var_declared(candidate)
-                            and ctx.global_vars.get(candidate) is func
-                        ):
-                            name = candidate
-                    with helper_defaults.bind(ctx.func, func, name):
-                        node.ptr = func(*py_args, **py_kwargs)
+                pruning = ctx.kernel_compile_context.pruning
+                node.ptr = func(*py_args, **py_kwargs)
 
                 if not pruning.enforcing:
                     pruning.record_after_call(ctx, func, node, node_args, node_keywords)
