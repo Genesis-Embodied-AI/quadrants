@@ -58,7 +58,7 @@ if TYPE_CHECKING:
 
 
 # Schema lookup uses three cache layers:
-# - Dataclass instance (and context) -> schema or SchemaNeedingMemberChecks.
+# - Dataclass instance, then numeric defaults and ancestor path -> schema or SchemaNeedingMemberChecks.
 # - Dataclass type -> field names and Final flags.
 # - Dataclass type and inferred member types -> schema.
 #
@@ -96,7 +96,7 @@ if TYPE_CHECKING:
 # Instance-cache writes require weak-reference support; otherwise return the schema without storing it.
 #
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
-_schema_by_dataclass_instance_and_context: WeakIdentityCache[
+_schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path: WeakIdentityCache[
     dict[InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks]
 ] = WeakIdentityCache()
 
@@ -220,11 +220,17 @@ def cached_infer_dataclass_schema(
     ancestor_ids = ancestor_ids | {id(dataclass_instance)}
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
-    schema_by_context = _schema_by_dataclass_instance_and_context.get(dataclass_instance)
+    schema_by_numeric_defaults_and_ancestor_path = (
+        _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(dataclass_instance)
+    )
     # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
     # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
-    context = (id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
-    cached_schema = schema_by_context.get(context) if schema_by_context is not None else None
+    numeric_defaults_and_ancestor_path = (id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
+    cached_schema = (
+        schema_by_numeric_defaults_and_ancestor_path.get(numeric_defaults_and_ancestor_path)
+        if schema_by_numeric_defaults_and_ancestor_path is not None
+        else None
+    )
     if isinstance(cached_schema, SchemaNeedingMemberChecks):
         if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
             return cached_schema.schema
@@ -329,15 +335,17 @@ def cached_infer_dataclass_schema(
         _schema_by_dataclass_type_and_member_types[key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     if stable or (params.frozen and not has_deferred and not has_final_fields and non_frozen_ancestor_path is None):
-        if schema_by_context is None:
-            schema_by_context = {}
+        if schema_by_numeric_defaults_and_ancestor_path is None:
+            schema_by_numeric_defaults_and_ancestor_path = {}
             try:
-                _schema_by_dataclass_instance_and_context[dataclass_instance] = schema_by_context
+                _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path[dataclass_instance] = (
+                    schema_by_numeric_defaults_and_ancestor_path
+                )
             except TypeError:
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
 
-        schema_by_context[context] = (
+        schema_by_numeric_defaults_and_ancestor_path[numeric_defaults_and_ancestor_path] = (
             schema
             if stable
             else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
