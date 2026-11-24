@@ -63,7 +63,9 @@ _schema_by_context_by_instance: WeakIdentityCache[
 # These caches retain dataclass classes, assuming applications define relatively few of them.
 # Repeatedly generating new dataclass classes will grow these caches for the lifetime of the process.
 # Generated schema classes, keyed by source class identity, stability, and ordered member names/type identities.
-_schemas: dict[tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]] = {}
+_schema_by_dataclass_type_and_member_types: dict[
+    tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]
+] = {}
 # Source classes and their ordered field descriptions, reused across schema inference calls.
 _field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...]]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
@@ -228,7 +230,7 @@ def cached_infer_dataclass_schema(
         stable,
         tuple((name, id(member_type)) for (name, _, _), member_type in zip(field_plan, member_types)),
     )
-    schema = _schemas.get(key)
+    schema = _schema_by_dataclass_type_and_member_types.get(key)
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
         # The class plan retains the dataclass_type and field order; only runtime member types and stability vary here.
@@ -267,7 +269,7 @@ def cached_infer_dataclass_schema(
         )
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
-        _schemas[key] = schema
+        _schema_by_dataclass_type_and_member_types[key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     if stable or (params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None):
         if schema_by_context is None:
