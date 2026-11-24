@@ -251,7 +251,7 @@ def _infer_dataclass_runtime_member_types(
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None,
     final_value_key_by_value_id: FinalValueKeyCache | None,
-) -> tuple[list[InferredMemberType | DeferredMemberType | "_SpecialForm"], bool, bool]:
+) -> "tuple[list[InferredMemberType | DeferredMemberType | _SpecialForm], bool, bool]":
     """Read members and infer their types, returning (member_types, needs_member_check, has_deferred_error).
 
     needs_member_check means inferred types may need checking before reuse. has_deferred_error marks errors raised only
@@ -267,20 +267,20 @@ def _infer_dataclass_runtime_member_types(
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
     has_deferred_error = False
     for name, is_final in field_names_and_final:
-        child = getattr(dataclass_instance, name)
+        member = getattr(dataclass_instance, name)
         if is_final:
             needs_member_check = True
-            member_type = infer_final_field_annotation(child, final_non_frozen_path, name, final_value_key_by_value_id)
+            member_type = infer_final_field_annotation(member, final_non_frozen_path, name, final_value_key_by_value_id)
         else:
-            child_non_frozen_ancestor_path = None
+            member_non_frozen_ancestor_path = None
             if not frozen:
-                child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
+                member_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
             elif non_frozen_ancestor_path is not None:
-                child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
-            member_type, child_needs_member_check = infer_member_type(
-                child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
+                member_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
+            member_type, member_needs_check = infer_member_type(
+                member, f"{path}.{name}", ancestor_ids, member_non_frozen_ancestor_path, final_value_key_by_value_id
             )
-            needs_member_check |= child_needs_member_check
+            needs_member_check |= member_needs_check
         has_deferred_error |= isinstance(member_type, DeferredMemberType) or getattr(
             member_type, "_qd_has_deferred_errors", False
         )
