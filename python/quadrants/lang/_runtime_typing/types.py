@@ -1,7 +1,17 @@
 """Types shared by runtime dataclass processing."""
 
 import dataclasses
-from typing import Any, ClassVar, NamedTuple, NoReturn, Protocol, TypeAlias, TypeGuard
+from types import SimpleNamespace
+from typing import (
+    Any,
+    ClassVar,
+    NamedTuple,
+    NoReturn,
+    Protocol,
+    TypeAlias,
+    TypeGuard,
+    cast,
+)
 
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants.lang.matrix import MatrixType
@@ -44,6 +54,46 @@ def is_frozen_dataclass(dataclass_type: type[DataclassInstance]) -> bool:
 def is_runtime_dataclass_schema(py_obj: object) -> TypeGuard[type[RuntimeDataclassSchema]]:
     """Recognize a generated dataclass schema class by its schema metadata."""
     return isinstance(py_obj, type) and hasattr(py_obj, "_qd_underlying_dataclass")
+
+
+def create_dataclass_schema(
+    dataclass_type: type[DataclassInstance],
+    fields: dict[str, dataclasses.Field[Any]],
+    needs_member_check: bool,
+    has_deferred_error: bool,
+) -> type[RuntimeDataclassSchema]:
+    """Create a schema class from inferred fields and cache-reuse flags."""
+    # FIXME: Replace this fake dataclass with a schema object, and migrate the dataclass-processing code that
+    # consumes it to explicitly expect schema objects rather than relying on the dataclass interface.
+    return cast(
+        type[RuntimeDataclassSchema],
+        type(
+            dataclass_type.__name__,
+            (),
+            {
+                "__module__": dataclass_type.__module__,
+                "__qualname__": dataclass_type.__qualname__,
+                "__dataclass_fields__": fields,
+                "__dataclass_params__": SimpleNamespace(
+                    frozen=is_frozen_dataclass(dataclass_type),
+                    unsafe_hash=False,
+                ),
+                "__hash__": dataclass_type.__hash__,
+                "_qd_underlying_dataclass": dataclass_type,
+                "_qd_needs_member_check": needs_member_check,
+                "_qd_has_deferred_errors": has_deferred_error,
+                # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
+                # must share a specialization.
+                "_qd_type_signature": (
+                    id(dataclass_type),
+                    tuple(
+                        (name, getattr(field.type, "_qd_type_signature", id(field.type)))
+                        for name, field in fields.items()
+                    ),
+                ),
+            },
+        ),
+    )
 
 
 # Object identity maps to the retained object and its type-tagged Final specialization signature.
