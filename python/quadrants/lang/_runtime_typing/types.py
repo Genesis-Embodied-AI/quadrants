@@ -1,7 +1,7 @@
 """Types shared by runtime dataclass processing."""
 
 import dataclasses
-from typing import Any, ClassVar, NamedTuple, NoReturn, Protocol, TypeAlias
+from typing import Any, ClassVar, NamedTuple, NoReturn, Protocol, TypeAlias, TypeGuard
 
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants.lang.matrix import MatrixType
@@ -26,6 +26,11 @@ class RuntimeDataclassSchema(DataclassInstance, Protocol):
     _qd_has_deferred_errors: ClassVar[bool]
     # Original class identity and ordered member type signatures, used to select a compiled kernel.
     _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
+
+
+def is_schema(py_obj: object) -> TypeGuard[type[RuntimeDataclassSchema]]:
+    """Recognize a generated dataclass schema class by its schema metadata."""
+    return isinstance(py_obj, type) and hasattr(py_obj, "_qd_underlying_dataclass")
 
 
 # Object identity maps to the retained object and its type-tagged Final specialization signature.
