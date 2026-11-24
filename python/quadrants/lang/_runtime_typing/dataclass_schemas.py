@@ -265,7 +265,7 @@ def _infer_dataclass_runtime_member_types(
                 child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             if dataclasses.is_dataclass(member_type):
-                needs_member_check |= not getattr(member_type, "_qd_frozen")
+                needs_member_check |= cast(type[RuntimeDataclassSchema], member_type)._qd_needs_member_check
             elif (
                 child is not None
                 and type(child) not in _TENSOR_WRAPPER_TYPES
@@ -358,7 +358,7 @@ def cached_infer_dataclass_schema(
                     "__dataclass_params__": params,
                     "__hash__": dataclass_type.__hash__,
                     "_qd_underlying_dataclass": dataclass_type,
-                    "_qd_frozen": not needs_member_check,
+                    "_qd_needs_member_check": needs_member_check,
                     "_qd_has_deferred_errors": has_deferred_error,
                     # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                     # must share a specialization.
@@ -453,7 +453,7 @@ def prepare_kernel_dataclass_args_for_mapper(
         schema = meta.annotation
         if hasattr(schema, "_qd_underlying_dataclass"):
             has_deferred_error |= schema._qd_has_deferred_errors
-            unstable |= not schema._qd_frozen
+            unstable |= schema._qd_needs_member_check
     kernel._runtime_has_deferred = has_deferred_error
     kernel.template_slot_locations = [
         i

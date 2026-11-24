@@ -645,7 +645,7 @@ class FuncBase:
                 is_frozen = params is not None and (params.frozen or params.unsafe_hash)
             # Runtime schemas can contain mutable children even when the outer dataclass is frozen. Re-read their
             # leaves on each launch; instance identity alone cannot validate a cached launch buffer.
-            if hasattr(needed_arg_type, "_qd_underlying_dataclass") and not needed_arg_type._qd_frozen:
+            if hasattr(needed_arg_type, "_qd_underlying_dataclass") and needed_arg_type._qd_needs_member_check:
                 is_frozen = False
             idx = 0
             if is_frozen:

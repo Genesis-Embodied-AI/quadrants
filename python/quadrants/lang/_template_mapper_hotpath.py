@@ -410,7 +410,7 @@ def _extract_arg(
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_runtime_schema = hasattr(annotation, "_qd_underlying_dataclass")
-        is_frozen = annotation.__hash__ is not None and (not is_runtime_schema or annotation._qd_frozen)
+        is_frozen = annotation.__hash__ is not None and (not is_runtime_schema or not annotation._qd_needs_member_check)
         # Serve the ``_qd_specialization_signature`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
