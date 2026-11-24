@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 
 
 # Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
-_schema_by_context_by_instance: WeakIdentityCache[
+_schema_by_dataclass_instance_and_context: WeakIdentityCache[
     dict[InferenceContextKey, type[RuntimeDataclassSchema] | FrozenSchemaEntry]
 ] = WeakIdentityCache()
 
@@ -172,7 +172,7 @@ def cached_infer_dataclass_schema(
         id(runtime.default_fp),
         non_frozen_ancestor_path,
     )
-    schema_by_context = _schema_by_context_by_instance.get(dataclass_instance)
+    schema_by_context = _schema_by_dataclass_instance_and_context.get(dataclass_instance)
     cached_schema = schema_by_context.get(inference_context_key) if schema_by_context is not None else None
     if isinstance(cached_schema, FrozenSchemaEntry):
         if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
@@ -275,7 +275,7 @@ def cached_infer_dataclass_schema(
         if schema_by_context is None:
             schema_by_context = {}
             try:
-                _schema_by_context_by_instance[dataclass_instance] = schema_by_context
+                _schema_by_dataclass_instance_and_context[dataclass_instance] = schema_by_context
             except TypeError:
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
