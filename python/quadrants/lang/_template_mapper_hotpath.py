@@ -492,6 +492,7 @@ def _extract_arg(
                 _key_map = None
             if _key_map is None:
                 try:
+                    # FIXME: Avoid setattr and store this cache without modifying passed-in objects.
                     object.__setattr__(arg, "_qd_spec_key", {id(annotation): (annotation, key)})
                 except AttributeError:
                     # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
