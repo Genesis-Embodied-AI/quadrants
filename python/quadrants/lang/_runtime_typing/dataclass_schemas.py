@@ -262,7 +262,7 @@ def _infer_dataclass_runtime_member_types(
     if a member is used during compilation.
     """
     dataclass_type = type(dataclass_instance)
-    params = getattr(dataclass_type, "__dataclass_params__")
+    params = dataclass_type.__dataclass_params__
     frozen = params.frozen or params.unsafe_hash
     final_non_frozen_path = non_frozen_ancestor_path
     if not frozen:
@@ -332,7 +332,7 @@ def cached_infer_dataclass_schema(
         return cached_schema_entry.schema
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
-    params = getattr(dataclass_type, "__dataclass_params__")
+    params = dataclass_type.__dataclass_params__
     member_types, needs_member_check, has_deferred_error = _infer_dataclass_runtime_member_types(
         dataclass_instance,
         field_names_and_final,

@@ -10,9 +10,10 @@ from quadrants.types import buffer_view_type, ndarray_type
 
 
 class DataclassInstance(Protocol):
-    """Describe the field metadata shared by Python dataclass instances."""
+    """Describe the field metadata and decorator options shared by Python dataclass instances."""
 
     __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
+    __dataclass_params__: ClassVar["dataclasses._DataclassParams"]
 
 
 class RuntimeDataclassSchema(DataclassInstance, Protocol):
