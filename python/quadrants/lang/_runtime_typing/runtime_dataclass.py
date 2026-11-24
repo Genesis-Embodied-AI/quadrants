@@ -329,7 +329,7 @@ def prepare_kernel_dataclass_args_for_mapper(
         kernel.mapper._mapping_cache.clear()
         kernel.mapper._mapping_cache_tracker.clear()
     kernel._launch_arg_schemas = ()
-    # Per-call cache: id(value) -> (value, compilation key); retain the value to verify its identity.
+    # Per-call cache: id(value) -> (value, specialization signature); retain the value to verify its identity.
     final_value_key_by_value_id: FinalValueKeyCache = {}
     kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
     kernel.mapper.arguments = kernel.arg_metas

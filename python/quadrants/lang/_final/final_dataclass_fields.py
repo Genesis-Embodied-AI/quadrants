@@ -74,7 +74,7 @@ def infer_final_field_annotation(
             such as "State.config". None means no reassignable dataclass was found on the path.
         name: The field's name as a string, such as "count", used in error messages.
         final_value_key_by_value_id: Optional cache shared within the current kernel call, mapping id(py_obj) to
-            (py_obj, compilation_key). Stores computed compilation keys for reuse later in the call.
+            (py_obj, specialization_signature). Stores computed specialization signatures for reuse later in the call.
             Only successfully validated objects are cached. Passing the cache lets validation and compiled-kernel
             selection share these keys within one call. A fresh cache is needed for each call because objects can
             change between calls.
@@ -97,7 +97,7 @@ def infer_final_field_annotation(
                 final_value_key_by_value_id[id(py_obj)] = (py_obj, key)
         except TypeError as error:
             return create_deferred_member_type_for_invalid_dataclass_member(TypeError, str(error), py_obj)
-    # A schema needs only the marker; the compilation key and compiler retain the actual value and its type.
+    # A schema needs only the marker; the specialization signature and compiler retain the actual value and its type.
     return _FINAL_MARKER
 
 

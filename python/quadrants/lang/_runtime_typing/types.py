@@ -28,7 +28,7 @@ class RuntimeDataclassSchema(DataclassInstance, Protocol):
     _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
 
-# Object identity maps to the retained object and its type-tagged Final compilation key.
+# Object identity maps to the retained object and its type-tagged Final specialization signature.
 FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
 
 InferredMemberType: TypeAlias = (

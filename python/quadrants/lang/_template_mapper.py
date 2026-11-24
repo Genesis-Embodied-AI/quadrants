@@ -130,8 +130,8 @@ class TemplateMapper:
         if runtime_kernel is not None:
             final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
         # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
-        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the spec-key cache would serve an entry
-        # compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
+        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the specialization signature cache would serve
+        # an entry compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
         #
         # Only ``template_slot_locations`` is iterated: a data_oriented container can only appear at a ``qd.template()``
         # position (a typed-dataclass arg carries a dataclass type, and data_oriented classes are never dataclasses).

@@ -127,8 +127,8 @@ def _get_frozen_dc_plan(
     key = (id(used_params), struct_cls, basename)
     entry = _frozen_dc_plans.get(key)
     # Guard against id() reuse: after the original set is garbage-collected, a new set can be allocated at the same
-    # address. mimalloc (default in CPython 3.13+) makes this significantly more likely. Validate with an identity
-    # check so a stale plan from a different kernel specialization is never returned.
+    # address. mimalloc (default in CPython 3.13+) makes this significantly more likely. Validate with an identity check
+    # so a stale plan from a different kernel specialization is never returned.
     if entry is not None and entry[0] is used_params:
         return entry[1]
     # ``Final[T]`` fields are baked constants with no runtime arg slot, so exclude them from the plan to keep the arg
@@ -170,10 +170,11 @@ def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dic
     that makes two ancestors compare/hash equal cannot serve the wrong view.
 
     A ``Final``-bearing subtree is exempt from the cache (and from the ``_qd_all_field`` shortcut): like the
-    spec-key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and an
-    ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache would keep
-    sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so ``_qd_all_field`` would
-    be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full ``_recursive_set_args`` path.)
+    specialization signature/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation
+    re-runs, and an ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache
+    would keep sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so
+    ``_qd_all_field`` would be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full
+    ``_recursive_set_args`` path.)
 
     The Final gate uses the annotated ``struct_cls``, not ``type(v)``: only the base's fields reach the kernel, so a
     subclass's application-only ``Final`` field (e.g. an unbakeable ``Final[list]``) must be ignored, not validated.
