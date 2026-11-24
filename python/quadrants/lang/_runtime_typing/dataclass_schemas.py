@@ -35,6 +35,7 @@ from quadrants.lang._runtime_typing.types import (
     InferenceContextKey,
     InferredMemberType,
     RuntimeDataclassSchema,
+    is_frozen_dataclass,
     is_runtime_dataclass_schema,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
@@ -262,12 +263,11 @@ def _infer_dataclass_runtime_member_types(
     if a member is used during compilation.
     """
     dataclass_type = type(dataclass_instance)
-    params = dataclass_type.__dataclass_params__
-    frozen = params.frozen or params.unsafe_hash
+    frozen = is_frozen_dataclass(dataclass_type)
     final_non_frozen_path = non_frozen_ancestor_path
     if not frozen:
         final_non_frozen_path = dataclass_type.__name__
-    needs_member_check = not params.frozen
+    needs_member_check = not frozen
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
     has_deferred_error = False
     for name, is_final in field_names_and_final:
@@ -391,7 +391,10 @@ def cached_infer_dataclass_schema(
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     if not needs_member_check or (
-        params.frozen and not has_deferred_error and not has_final_fields and non_frozen_ancestor_path is None
+        is_frozen_dataclass(dataclass_type)
+        and not has_deferred_error
+        and not has_final_fields
+        and non_frozen_ancestor_path is None
     ):
         if schema_by_numeric_defaults_and_ancestor_path is None:
             schema_by_numeric_defaults_and_ancestor_path = {}

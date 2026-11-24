@@ -16,9 +16,10 @@ from tests.helpers import test_utils
 
 
 @pytest.mark.parametrize("slots", [False, True])
+@pytest.mark.parametrize("unsafe_hash", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_schema_cache_does_not_modify_instances(slots: bool) -> None:
-    @dataclass(frozen=True, slots=slots)
+def test_schema_cache_does_not_modify_instances(slots: bool, unsafe_hash: bool) -> None:
+    @dataclass(frozen=not unsafe_hash, unsafe_hash=unsafe_hash, slots=slots)
     class State:
         value: object
 
@@ -73,6 +74,10 @@ def test_inferred_member_check_requirements() -> None:
     class Mutable:
         value: object
 
+    @dataclass(unsafe_hash=True)
+    class UnsafeHash:
+        value: object
+
     tensor = qd.tensor(qd.f32, shape=2, backend=qd.Backend.NDARRAY)
     for py_obj, expected in (
         (None, False),
@@ -85,6 +90,8 @@ def test_inferred_member_check_requirements() -> None:
         (qd.Vector([1, 2]), True),
         (qd.Struct(value=1), True),
         (Frozen(1), False),
+        (UnsafeHash(1), False),
+        (UnsafeHash(Mutable(1)), True),
         (Mutable(1), True),
         (Frozen(Mutable(1)), True),
         ([], True),

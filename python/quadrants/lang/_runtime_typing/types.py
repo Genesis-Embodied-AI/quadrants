@@ -29,6 +29,11 @@ class RuntimeDataclassSchema(DataclassInstance, Protocol):
     _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
 
+def is_frozen_dataclass(dataclass_type: type[DataclassInstance]) -> bool:
+    """Treat frozen=True or unsafe_hash=True as a promise against field reassignment."""
+    return dataclass_type.__dataclass_params__.frozen or dataclass_type.__dataclass_params__.unsafe_hash
+
+
 def is_runtime_dataclass_schema(py_obj: object) -> TypeGuard[type[RuntimeDataclassSchema]]:
     """Recognize a generated dataclass schema class by its schema metadata."""
     return isinstance(py_obj, type) and hasattr(py_obj, "_qd_underlying_dataclass")
