@@ -184,7 +184,7 @@ class TemplateMapper:
         if runtime_kernel is not None:
             runtime_kernel._launch_arg_schemas = launch_arg_schemas
             runtime_kernel._runtime_has_deferred |= any(
-                schema._qd_runtime_has_deferred_errors for _, _, schema in launch_arg_schemas
+                schema._qd_has_deferred_errors for _, _, schema in launch_arg_schemas
             )
 
         key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id) + (

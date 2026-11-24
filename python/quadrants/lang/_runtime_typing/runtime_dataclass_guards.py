@@ -50,8 +50,8 @@ class FrozenSchemaEntry:
                 ):
                     self.tensor_guards.append((name, type(child), type(backing)))
                     continue
-            if hasattr(member_type, "_qd_runtime_underlying_dataclass"):
-                if getattr(member_type, "_qd_runtime_frozen"):
+            if hasattr(member_type, "_qd_underlying_dataclass"):
+                if getattr(member_type, "_qd_frozen"):
                     continue
             elif child is None or isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
                 continue
