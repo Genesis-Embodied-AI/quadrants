@@ -327,12 +327,12 @@ def cached_infer_dataclass_schema(
         non_frozen_ancestor_path,
         final_value_key_by_value_id,
     )
-    key = (
+    dataclass_type_and_member_types = (
         id(dataclass_type),
         stable,
         tuple((name, id(member_type)) for (name, _), member_type in zip(field_names_and_final, member_types)),
     )
-    schema = _schema_by_dataclass_type_and_member_types.get(key)
+    schema = _schema_by_dataclass_type_and_member_types.get(dataclass_type_and_member_types)
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
         # The field cache retains the dataclass type and field order; member types and stability come from inference.
@@ -374,7 +374,7 @@ def cached_infer_dataclass_schema(
         )
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
-        _schema_by_dataclass_type_and_member_types[key] = schema
+        _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
     if stable or (params.frozen and not has_deferred and not has_final_fields and non_frozen_ancestor_path is None):
         if schema_by_numeric_defaults_and_ancestor_path is None:
