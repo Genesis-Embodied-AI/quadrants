@@ -202,7 +202,7 @@ def chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
 def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
     reachable from ``arg``. Used by the template-mapper to refine the specialization signature for ``@qd.data_oriented``
-    args holding ndarrays — see the data_oriented branch in ``_extract_arg``.
+    args holding ndarrays - see the data_oriented branch in ``_extract_arg``.
     """
     # A cached path's leaf can stop being an ``Ndarray`` mid-lifetime (a ``qd.Tensor`` impl swapped for a
     # ``MatrixField``), hence the skip below rather than reading Ndarray-only accessors off it.
@@ -287,7 +287,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # 2. Different argument instances with same type and same value, will get templatized into separate kernels.
             return weakref.ref(arg)
         if is_data_oriented(arg):
-            # Same memory-leak avoidance as above — keep ``weakref.ref(arg)`` so the specialization signature never
+            # Same memory-leak avoidance as above - keep ``weakref.ref(arg)`` so the specialization signature never
             # holds a strong reference to user state. But for data_oriented containers that hold ``Ndarray`` members,
             # the live ``weakref`` alone is too coarse: same instance with ``state.x = other_ndarray`` of a different
             # dtype/ndim would re-use the previously-compiled kernel, which was specialised for the old shape. Walk the
