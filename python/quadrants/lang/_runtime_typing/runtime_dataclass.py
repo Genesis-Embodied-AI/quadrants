@@ -68,8 +68,8 @@ _schema_by_dataclass_instance_and_context: WeakIdentityCache[
 _schema_by_dataclass_type_and_member_types: dict[
     tuple[int, bool, tuple[tuple[str, int], ...]], type[RuntimeDataclassSchema]
 ] = {}
-# Source classes and their ordered field descriptions, reused across schema inference calls.
-_field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...]]] = {}
+# Source classes, ordered field descriptions, and whether any fields are Final, reused across inference calls.
+_field_plans: dict[int, tuple[type, tuple[tuple[str, dataclasses.Field[Any], bool], ...], bool]] = {}
 # Matrix/vector type descriptions, keyed by rows, columns, dimensionality, and scalar dtype.
 _matrix_types: dict[tuple[int, int, int, DataTypeCxx], MatrixType] = {}
 # Inferred struct type descriptions, keyed by ordered member names and type identities.
@@ -181,21 +181,22 @@ def cached_infer_dataclass_schema(
             return cached_schema.schema
     elif cached_schema is not None:
         return cached_schema
-    finals = get_final_field_names(dataclass_type)
     plan = _field_plans.get(id(dataclass_type))
     if plan is None:
+        finals = get_final_field_names(dataclass_type)
         plan = (
             dataclass_type,
             tuple((field.name, field, field.name in finals) for field in dataclasses.fields(dataclass_type)),
+            bool(finals),
         )
         _field_plans[id(dataclass_type)] = plan
-    _, field_plan = plan
+    _, field_plan, has_final_fields = plan
     params = getattr(dataclass_type, "__dataclass_params__")
     container_prevents_rebinding = params.frozen or params.unsafe_hash
     final_non_frozen_path = non_frozen_ancestor_path
     if not container_prevents_rebinding:
         final_non_frozen_path = dataclass_type.__name__
-    stable = params.frozen and not finals
+    stable = params.frozen and not has_final_fields
     member_types = []
     has_deferred = False
     for name, field, is_final in field_plan:
@@ -273,7 +274,7 @@ def cached_infer_dataclass_schema(
         final_field_names(schema)
         _schema_by_dataclass_type_and_member_types[key] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
-    if stable or (params.frozen and not has_deferred and not finals and non_frozen_ancestor_path is None):
+    if stable or (params.frozen and not has_deferred and not has_final_fields and non_frozen_ancestor_path is None):
         if schema_by_context is None:
             schema_by_context = {}
             try:
