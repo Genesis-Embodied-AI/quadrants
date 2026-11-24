@@ -41,7 +41,7 @@ from quadrants.lang import impl, runtime_ops
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
-from quadrants.lang._fast_caching import src_hasher
+from quadrants.lang._fast_caching import config_reads, src_hasher
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -401,6 +401,7 @@ class Kernel(FuncBase):
         self.runtime = impl.get_runtime()
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
+        self._seed_read_before_compile: dict[CompiledKernelKeyType, bool] = {}
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
@@ -414,84 +415,38 @@ class Kernel(FuncBase):
         pass 1 runs in ``only_parse_function_def`` mode and never enters a callee body; otherwise the build fails
         looking up callee variables in an empty used-set ("Name __qd_... is not defined").
 
-        Sets ``self._l1_key``, ``self._pruning_paths_from_l1`` and ``self.fast_checksum``, all read after the compile
-        by ``_maybe_persist_l1_and_set_l2_key``.
+        On a miss, remember the seed flag until this specialization finishes native compilation.
         """
-        self._l1_key = None  # type: ignore[attr-defined]
-        self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
-        self.fast_checksum = None
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
-            self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
-            self._l1_key = src_hasher.make_source_config_key(kernel_source_info)
+            self._kernel_source_info_cached = kernel_source_info
+            seed_was_read = config_reads.random_seed_read
+            seed_options = (True,) if seed_was_read else (False, True)
+            cached_graph_do_while_levels = None
+            for include_seed in seed_options:
+                l1_key = src_hasher.make_source_config_key(kernel_source_info, include_random_seed=include_seed)
 
-            # Phase 1: L1 lookup - pruning info only, no args walk yet.
-            pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(self._l1_key)
-            if pruning_paths is None:
-                # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether
-                # the narrow args walk will succeed isn't known until after the compile.
-                return None
-            self._pruning_paths_from_l1 = pruning_paths
+                # Phase 1: L1 lookup - pruning info only, no args walk yet.
+                pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(l1_key)
+                if pruning_paths is None:
+                    # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether
+                    # the narrow args walk will succeed isn't known until after the compile.
+                    continue
 
-            # Phase 2: narrow args hash + L2 lookup.
-            narrow_args_hash = src_hasher.compute_narrow_args_hash(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
-            )
-            if narrow_args_hash is None:
-                # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
-                # L2 entry from being written for this call.
-                return None
-            self.fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash)
-            self.src_ll_cache_observations.cache_key_generated = True
-
-            cache_value = src_hasher.load(self.fast_checksum)
-            if cache_value is not None:
-                frontend_cache_key = cache_value.frontend_cache_key
-                self.src_ll_cache_observations.cache_validated = True
-                prog = impl.get_runtime().prog
-                self.compiled_kernel_data_by_key[key] = prog.load_fast_cache(
-                    frontend_cache_key,
-                    self.func.__name__,
-                    prog.config(),
-                    prog.get_device_caps(),
+                # Phase 2: narrow args hash + L2 lookup.
+                narrow_args_hash = src_hasher.compute_narrow_args_hash(
+                    self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
                 )
-                if self.compiled_kernel_data_by_key[key]:
-                    self.src_ll_cache_observations.cache_loaded = True
-                    self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
-                    # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
-                    # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
-                    # the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +
-                    # `checkpoint_transformer.py` + `build_While` would have written. L1's copy of the level table is
-                    # deliberately not consulted here: it is shared by every specialization, and a `qd.graph_do_while`
-                    # inside a `qd.static` branch belongs to only some of them.
-                    _cached_levels = cache_value.graph_do_while_levels
-                    if _cached_levels:
-                        self.graph_do_while_levels = [
-                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
-                            for name, parent, cpp_arg_id in _cached_levels
-                        ]
-                        self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
-                    if cache_value.checkpoint_yield_on_args:
-                        self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
-                        self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
-                        # Pydantic coerces IntEnum -> int at CacheValue construction time, so the raw labels are plain
-                        # ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel
-                        # ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the
-                        # original ``IntEnum`` member -- preserving the documented contract that
-                        # ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
-                        # ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing
-                        # slots to ``None`` -> raw-int fallback (the same behaviour they had on v3).
-                        raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
-                        qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
-                        if len(qualnames) != len(raw_labels):
-                            qualnames = [None] * len(raw_labels)
-                        self.checkpoint_user_labels_by_cp_id = [
-                            src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
-                        ]
-                    return cache_value.used_py_dataclass_parameters
-            # L2 miss or artifact load failed: report cold, so ``materialize`` runs pass 0 + pass 1 and populates
-            # per-callee pruning info. ``fast_checksum`` stays set, so a fresh L2 entry is written after the compile.
-            # L1's level table seeds the cold-compile path until the AST transformer repopulates it.
+                if narrow_args_hash is None:
+                    continue
+                fast_checksum = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
+                self.src_ll_cache_observations.cache_key_generated = True
+
+                loaded = self._load_fastcache_artifact(fast_checksum, key, include_seed=include_seed)
+                if loaded is not None:
+                    return loaded
+            self._seed_read_before_compile[key] = seed_was_read
+            # The AST walk rebuilds the level table on a cold compile.
             if cached_graph_do_while_levels and not self.graph_do_while_levels:
                 self.graph_do_while_levels = [
                     GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
@@ -507,6 +462,57 @@ class Kernel(FuncBase):
             # qd.init(print_non_pure=..) is True. And it is confusing to set that to True, and see nothing printed.
             print(f"[NOT_PURE] Debug information: not pure: {self.func.__name__}")
         return None
+
+    def _load_fastcache_artifact(
+        self, fast_checksum: str, key: "CompiledKernelKeyType", *, include_seed: bool
+    ) -> set[str] | None:
+        cache_value = src_hasher.load(fast_checksum)
+        if cache_value is None:
+            return None
+        self.src_ll_cache_observations.cache_validated = True
+        prog = impl.get_runtime().prog
+        artifact = prog.load_fast_cache(
+            cache_value.frontend_cache_key,
+            self.func.__name__,
+            prog.config(),
+            prog.get_device_caps(),
+        )
+        if not artifact or (not include_seed and config_reads.random_seed_read):
+            return None
+        self.compiled_kernel_data_by_key[key] = artifact
+        self.src_ll_cache_observations.cache_loaded = True
+        self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
+        # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
+        # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
+        # the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +
+        # `checkpoint_transformer.py` + `build_While` would have written. L1's copy of the level table is
+        # deliberately not consulted here: it is shared by every specialization, and a `qd.graph_do_while`
+        # inside a `qd.static` branch belongs to only some of them.
+        _cached_levels = cache_value.graph_do_while_levels
+        if _cached_levels:
+            self.graph_do_while_levels = [
+                GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
+                for name, parent, cpp_arg_id in _cached_levels
+            ]
+            self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
+        if cache_value.checkpoint_yield_on_args:
+            self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
+            self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
+            # Pydantic coerces IntEnum -> int at CacheValue construction time, so the raw labels are plain
+            # ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel
+            # ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the
+            # original ``IntEnum`` member -- preserving the documented contract that
+            # ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
+            # ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing
+            # slots to ``None`` -> raw-int fallback (the same behaviour they had on v3).
+            raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
+            qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
+            if len(qualnames) != len(raw_labels):
+                qualnames = [None] * len(raw_labels)
+            self.checkpoint_user_labels_by_cp_id = [
+                src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
+            ]
+        return cache_value.used_py_dataclass_parameters
 
     def materialize(self, key: "CompiledKernelKeyType | None", py_args: tuple[Any, ...], arg_features=None):
         if key is None:
@@ -620,29 +626,33 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_kernel_compile_context = None
 
-            self._maybe_persist_l1_and_set_l2_key(key, py_args)
-
-    def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
-        """Thin delegate to ``src_hasher.persist_l1_and_set_l2_key``; see that function's docstring for behaviour."""
-        new_fast_checksum, generated = src_hasher.persist_l1_and_set_l2_key(
-            l1_key=getattr(self, "_l1_key", None),
-            kernel_source_info=getattr(self, "_kernel_source_info_cached", None),
+    def _fastcache_key_after_compile(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> str | None:
+        seed_was_read = self._seed_read_before_compile.pop(key, None)
+        if seed_was_read is None:
+            return None
+        l1_key = src_hasher.make_source_config_key(
+            self._kernel_source_info_cached, include_random_seed=seed_was_read or config_reads.random_seed_read
+        )
+        # The lookup may have used another key. Merge pruning paths only from the store key.
+        pruning_paths, _ = src_hasher.load_pruning_info(l1_key)
+        fast_checksum, generated = src_hasher.persist_l1_and_set_l2_key(
+            l1_key=l1_key,
+            kernel_source_info=self._kernel_source_info_cached,
             used_py_dataclass_parameters=self.used_py_dataclass_parameters_by_key_enforcing.get(key),
             visited_functions=self.visited_functions,
             graph_do_while_levels=[
                 (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id) for level in self.graph_do_while_levels
             ]
             or None,
-            pruning_paths_from_l1=getattr(self, "_pruning_paths_from_l1", None),
-            fast_checksum=self.fast_checksum,
+            pruning_paths_from_l1=pruning_paths,
+            fast_checksum=None,
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,
         )
-        # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
-        self.fast_checksum = new_fast_checksum
         if generated:
             self.src_ll_cache_observations.cache_key_generated = True
+        return fast_checksum
 
     def launch_kernel(
         self,
@@ -818,10 +828,11 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
-                if self.fast_checksum:
+                fast_checksum = self._fastcache_key_after_compile(key, args)
+                if fast_checksum is not None:
                     src_hasher.store(
                         compile_result.cache_key,
-                        self.fast_checksum,
+                        fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         graph_do_while_levels=[  # type: ignore[reportCallIssue]

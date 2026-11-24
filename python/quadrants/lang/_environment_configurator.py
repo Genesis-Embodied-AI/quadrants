@@ -20,6 +20,10 @@ class _EnvironmentConfigurator:
         if not self.is_supplied(key):
             return
 
+        if _cast is not None:
+            self[key] = self.read(key, _cast)
+            return
+
         value_type = type(self[key])
         if issubclass(value_type, Enum):
 
@@ -35,9 +39,8 @@ class _EnvironmentConfigurator:
                 raise TypeError(f"{key} must be a {value_type.__name__} member")
             self[key] = value
         else:
-            if _cast is None:
-                _cast = self.bool_int if value_type is bool else value_type
-            self[key] = self.read(key, _cast)
+            parse = self.bool_int if value_type is bool else value_type
+            self[key] = self.read(key, parse)
 
     def is_supplied(self, key: str) -> bool:
         return key in self.kwargs or bool(os.environ.get("QD_" + key.upper()))

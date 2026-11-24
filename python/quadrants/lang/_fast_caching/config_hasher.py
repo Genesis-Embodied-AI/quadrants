@@ -1,5 +1,6 @@
 from quadrants.lang import impl
 
+from . import config_reads
 from .hash_utils import hash_iterable_strings
 
 EXCLUDE_PREFIXES = ["_", "offline_cache", "print_", "verbose_"]
@@ -21,7 +22,7 @@ EXCLUDE_KEYS = {
 }
 
 
-def hash_compile_config() -> str:
+def hash_compile_config(*, include_random_seed: bool = True) -> str:
     """
     Calculates a hash string for the current compiler config.
 
@@ -41,7 +42,12 @@ def hash_compile_config() -> str:
                 skip = True
         if skip:
             continue
-        v = getattr(config, k)
+        if k == "random_seed":
+            if not include_random_seed:
+                continue
+            v = config_reads.random_seed_for_cache_key(config)
+        else:
+            v = getattr(config, k)
         config_l.append(f"{k}={v}")
     config_hash = hash_iterable_strings(config_l, separator="\n")
     return config_hash

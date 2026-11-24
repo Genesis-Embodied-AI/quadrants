@@ -62,7 +62,7 @@ _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
 # Bump when persisted schemas or compilation rules make older cache artifacts incompatible.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v13-shared-dataclass-binding"
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v16-random-seed-read"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
@@ -130,10 +130,10 @@ def _resolve_intenum_member(qualname: str | None, fallback: int | None) -> int |
     return fallback
 
 
-def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
+def make_source_config_key(kernel_source_info: FunctionSourceInfo, *, include_random_seed: bool = True) -> str:
     """Build the L1 cache key: source + config + version, with no dependence on args."""
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
-    config_hash = config_hasher.hash_compile_config()
+    config_hash = config_hasher.hash_compile_config(include_random_seed=include_random_seed)
     # In L1 rather than L2: caps change codegen without changing argument identity.
     device_caps_hash = config_hasher.hash_device_caps()
     return hash_iterable_strings(

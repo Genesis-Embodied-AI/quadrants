@@ -439,7 +439,8 @@ def init(
         # These options are handled separately above.
         if key in ["arch", "default_fp", "default_ip"]:
             continue
-        env_comp.configure(key)
+        # Set the seed without reading its previous value to infer the type.
+        env_comp.configure(key, int if key == "random_seed" else None)
 
     unexpected_keys = kwargs.keys()
 
