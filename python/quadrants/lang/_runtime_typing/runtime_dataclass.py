@@ -253,6 +253,8 @@ def cached_infer_dataclass_schema(
             resolved = copy.copy(field)
             resolved.type = member_type
             fields[name] = resolved
+        # FIXME: Replace this fake dataclass with a schema object, and migrate the dataclass-processing code that
+        # consumes it to explicitly expect schema objects rather than relying on the dataclass interface.
         schema = cast(
             type[RuntimeDataclassSchema],
             type(
