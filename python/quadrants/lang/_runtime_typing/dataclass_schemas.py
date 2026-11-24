@@ -226,7 +226,7 @@ def infer_member_type(
     )
 
 
-def _infer_dataclass_member_types(
+def _infer_dataclass_runtime_member_types(
     dataclass_instance: DataclassInstance,
     field_names_and_final: tuple[tuple[str, bool], ...],
     path: str,
@@ -319,7 +319,7 @@ def cached_infer_dataclass_schema(
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
     params = getattr(dataclass_type, "__dataclass_params__")
-    member_types, stable, has_deferred = _infer_dataclass_member_types(
+    member_types, stable, has_deferred = _infer_dataclass_runtime_member_types(
         dataclass_instance,
         field_names_and_final,
         path,
