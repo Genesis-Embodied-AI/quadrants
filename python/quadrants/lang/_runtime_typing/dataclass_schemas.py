@@ -239,16 +239,20 @@ def cached_infer_dataclass_schema(
     ):
         return cached_schema_entry.schema
 
-    plan = _field_names_and_final_by_dataclass_type.get(id(dataclass_type))
-    if plan is None:
+    _, field_names_and_final, has_final_fields = _field_names_and_final_by_dataclass_type.get(
+        id(dataclass_type), (None, None, False)
+    )
+    if field_names_and_final is None:
         field_names_and_final = tuple(
             (field.name, dataclass_field_is_final(dataclass_type, field.name, field.type))
             for field in dataclasses.fields(dataclass_type)
         )
         has_final_fields = any(is_final for _, is_final in field_names_and_final)
-        plan = (dataclass_type, field_names_and_final, has_final_fields)
-        _field_names_and_final_by_dataclass_type[id(dataclass_type)] = plan
-    _, field_names_and_final, has_final_fields = plan
+        _field_names_and_final_by_dataclass_type[id(dataclass_type)] = (
+            dataclass_type,
+            field_names_and_final,
+            has_final_fields,
+        )
     params = getattr(dataclass_type, "__dataclass_params__")
     container_prevents_rebinding = params.frozen or params.unsafe_hash
     final_non_frozen_path = non_frozen_ancestor_path
