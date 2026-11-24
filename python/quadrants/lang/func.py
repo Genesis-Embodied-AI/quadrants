@@ -72,6 +72,8 @@ class Func(FuncBase):
 
         assert current_kernel is not None
         assert kernel_compile_context is not None
+        if kernel_compile_context.helper_defaults is not None:
+            kernel_compile_context.helper_defaults.record(self)
         if self.is_real_function:
             if current_kernel.autodiff_mode != _NONE:
                 raise QuadrantsSyntaxError("Real function in gradient kernels unsupported.")

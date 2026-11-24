@@ -105,5 +105,87 @@ def test_seed_cache_across_processes(tmp_path):
     assert run(1, 2048) == [[first[0][0], True], [1, True], [1, True], [2048, True], [1, True]]
 
 
+def _run_helper_defaults(cache_dir, seed):
+    qd.init(
+        arch=qd.cpu,
+        random_seed=seed,
+        cpu_max_num_threads=1,
+        num_compile_threads=1,
+        offline_cache_file_path=cache_dir,
+        offline_cache=True,
+        src_ll_cache=True,
+    )
+
+    @qd.func
+    def seed_default(value=qd.cfg.random_seed):
+        return value
+
+    @qd.func
+    def no_default():
+        return 0
+
+    selected = no_default if seed == 1 else seed_default
+
+    @qd.func
+    def nested_helper():
+        return selected()
+
+    @qd.func
+    def constant_default(value=7):
+        return value
+
+    @qd.func
+    def mutable_default(values=[qd.cfg.random_seed]):
+        return values[0]
+
+    @qd.kernel(fastcache=True)
+    def read_seed_default() -> qd.i32:
+        return seed_default()
+
+    @qd.kernel(fastcache=True)
+    def read_constant_default() -> qd.i32:
+        return constant_default()
+
+    @qd.kernel(fastcache=True)
+    def read_mutable_default() -> qd.i32:
+        return mutable_default()
+
+    @qd.kernel(fastcache=True)
+    def read_nested_default() -> qd.i32:
+        return nested_helper()
+
+    results = []
+    for kernel in (read_seed_default, read_constant_default, read_mutable_default, read_nested_default):
+        value = kernel()
+        observations = kernel._primal.src_ll_cache_observations
+        results.append([value, observations.cache_loaded, observations.cache_stored])
+    print("RESULT=" + json.dumps(results))
+    qd.reset()
+
+
+@test_utils.test(arch=qd.cpu)
+def test_helper_defaults_across_processes(tmp_path):
+    for index, seed in enumerate((1, 2, 1, 2)):
+        proc = subprocess.run(
+            [sys.executable, __file__, str(tmp_path), str(seed)],
+            env={**os.environ, "PYTHONPATH": "."},
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        result = json.loads(
+            next(line.removeprefix("RESULT=") for line in proc.stdout.splitlines() if line.startswith("RESULT="))
+        )
+        assert result == [
+            [seed, index >= 2, index < 2],
+            [7, index >= 1, index == 0],
+            [seed, False, False],
+            [0 if seed == 1 else seed, index >= 2, index < 2],
+        ]
+
+
 if __name__ == "__main__":
-    _run_kernels(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), bool(int(sys.argv[4])))
+    if len(sys.argv) == 3:
+        _run_helper_defaults(sys.argv[1], int(sys.argv[2]))
+    else:
+        _run_kernels(sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), bool(int(sys.argv[4])))

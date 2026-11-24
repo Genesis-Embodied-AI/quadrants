@@ -7,7 +7,7 @@ EXCLUDE_PREFIXES = ["_", "offline_cache", "print_", "verbose_"]
 # Exact key names that do not feed codegen. Matched by full name rather than by prefix, so that config fields added
 # later under the same prefix (say a new cuda_* compiler option) are not silently dropped from the cache key.
 EXCLUDE_KEYS = {
-    # The runtime seeds the random generator. Python compile-time reads enter the L2 key instead.
+    # The runtime seeds the random generator. Compile-time reads and helper defaults enter the L2 key.
     "random_seed",
     # Destination directory for IR dumps only. Whether anything is dumped is gated on the QD_DUMP_IR env var, which is
     # not part of the cache key either, so the path cannot influence the generated kernel.

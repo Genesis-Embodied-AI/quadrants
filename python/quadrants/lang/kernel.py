@@ -42,6 +42,10 @@ from quadrants.lang import impl, runtime_ops
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import config_reads, src_hasher
+from quadrants.lang._fast_caching.helper_defaults import (
+    HelperDefaultReads,
+    read_helper_defaults,
+)
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -442,7 +446,10 @@ class Kernel(FuncBase):
             config_values = config_reads.read_config_values(self._l1_entry.config_fields)
             if config_values is None:
                 return None
-            fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash, config_values)
+            defaults = read_helper_defaults(self, self._l1_entry.helper_paths)
+            if defaults is None:
+                return None
+            fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash, config_values, defaults)
             self.src_ll_cache_observations.cache_key_generated = True
 
             cache_value = src_hasher.load(fast_checksum)
@@ -556,6 +563,8 @@ class Kernel(FuncBase):
             runtime = impl.get_runtime()
             kernel_ctx = KernelCompileContext(self, pruning, key)
             reads = config_reads.ConfigReads() if self._l1_key and used_py_dataclass_parameters is None else None
+            helper_reads = HelperDefaultReads(self) if reads is not None else None
+            kernel_ctx.helper_defaults = helper_reads
             for _pass in range(range_begin, 2):
                 kernel_ctx.current_pass = KernelCompilePassContext(_pass)
                 if _pass == 0:
@@ -623,11 +632,15 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_kernel_compile_context = None
 
-            if reads is not None:
-                self._maybe_persist_l1_and_set_l2_key(key, py_args, reads)
+            if reads is not None and helper_reads is not None:
+                self._maybe_persist_l1_and_set_l2_key(key, py_args, reads, helper_reads)
 
     def _maybe_persist_l1_and_set_l2_key(
-        self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...], reads: config_reads.ConfigReads
+        self,
+        key: "CompiledKernelKeyType",
+        py_args: tuple[Any, ...],
+        reads: config_reads.ConfigReads,
+        helper_reads: HelperDefaultReads,
     ) -> None:
         fast_checksum = src_hasher.persist_l1_and_set_l2_key(
             l1_key=getattr(self, "_l1_key", None),
@@ -640,6 +653,7 @@ class Kernel(FuncBase):
             or None,
             l1_entry=self._l1_entry,
             config_reads=reads,
+            helper_reads=helper_reads,
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,

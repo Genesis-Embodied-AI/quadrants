@@ -56,6 +56,12 @@ from .args_hasher import FastcacheSkip
 from .config_reads import ConfigField, ConfigReads, read_config_values
 from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
+from .helper_defaults import (
+    HelperDefaultReads,
+    HelperDefaults,
+    HelperPath,
+    read_helper_defaults,
+)
 from .python_side_cache import PythonSideCache
 
 # Mixed into L1 / L2 keys so the two levels cannot collide, and so single-level entries written by older Quadrants
@@ -64,7 +70,7 @@ _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
 # Bump when persisted schemas or compilation rules make older cache artifacts incompatible.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v14-config-reads"
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v15-helper-defaults"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
@@ -155,12 +161,15 @@ def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
 
 
 def make_full_cache_key(
-    source_config_key: str, narrow_args_hash: str, config_values: dict[ConfigField, str] | None = None
+    source_config_key: str,
+    narrow_args_hash: str,
+    config_values: dict[ConfigField, str] | None = None,
+    helper_defaults: dict[HelperPath, HelperDefaults] | None = None,
 ) -> str:
-    """Build the L2 key from the L1 key, narrow args hash, and compile-time config values."""
-    config_values_json = json.dumps(sorted((config_values or {}).items()))
+    """Build the L2 key from the L1 key, narrow args hash, config values, and evaluated helper defaults."""
+    dependencies = json.dumps([sorted((config_values or {}).items()), sorted((helper_defaults or {}).items())])
     return hash_iterable_strings(
-        (_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION, config_values_json)
+        (_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION, dependencies)
     )
 
 
@@ -201,9 +210,9 @@ class L1CacheValue(BaseModel):
     entry is ``(cond_arg_name, parent_id, cond_cpp_arg_id)``, indexed by level id (outer before inner); see
     ``CacheValue`` for why the launch path needs the AST-resolved ``cond_cpp_arg_id``.
 
-    ``config_fields`` is the union of config reads from both compile passes and all known specializations.
-    The L2 key includes the field names and values. A key for a smaller set cannot find an artifact that
-    requires extra fields, even if concurrent processes overwrite L1 with different sets.
+    ``config_fields`` and ``helper_paths`` are unions from both compile passes and all known specializations.
+    L2 pairs the config fields with their current values and the helper paths with their evaluated defaults.
+    A key for a smaller set cannot find an artifact that requires extra dependencies.
 
     ``hashed_function_source_infos`` rejects an L1 hit when a helper's source changed, which the key itself cannot
     catch: ``kernel_hash`` covers only the entry point.
@@ -212,6 +221,7 @@ class L1CacheValue(BaseModel):
     used_py_dataclass_parameters: set[str]
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     config_fields: set[ConfigField]
+    helper_paths: set[HelperPath]
     graph_do_while_levels: list[tuple[str, int, int]] | None = None
 
 
@@ -220,6 +230,7 @@ def store_pruning_info(
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
     config_fields: set[ConfigField],
+    helper_paths: set[HelperPath],
     graph_do_while_levels: list[tuple[str, int, int]] | None = None,
 ) -> None:
     """Persist the L1 entry, or re-persist it with a grown union. See ``L1CacheValue`` for what's stored / why."""
@@ -231,6 +242,7 @@ def store_pruning_info(
         used_py_dataclass_parameters=used_py_dataclass_parameters,
         hashed_function_source_infos=list(hashed_function_source_infos),
         config_fields=config_fields,
+        helper_paths=helper_paths,
         graph_do_while_levels=graph_do_while_levels,
     )
     cache.store(source_config_key, cache_value.model_dump_json())
@@ -245,6 +257,7 @@ def persist_l1_and_set_l2_key(
     graph_do_while_levels: list[tuple[str, int, int]] | None,
     l1_entry: L1CacheValue | None,
     config_reads: ConfigReads,
+    helper_reads: HelperDefaultReads,
     raise_on_templated_floats: bool,
     py_args: tuple[Any, ...],
     arg_metas: Sequence[ArgMetadata],
@@ -252,11 +265,18 @@ def persist_l1_and_set_l2_key(
     """After a cold compile, update L1 and derive the L2 key from the complete read set."""
     if not l1_key or kernel_source_info is None or used_py_dataclass_parameters is None or not config_reads.cacheable:
         return None
+    if not helper_reads.cacheable:
+        return None
     key_paths = used_py_dataclass_parameters
     config_fields = set(config_reads.values)
+    helper_paths = set(helper_reads.values)
     if l1_entry is not None:
         key_paths = l1_entry.used_py_dataclass_parameters | key_paths
         config_fields |= l1_entry.config_fields
+        helper_paths |= l1_entry.helper_paths
+    defaults = read_helper_defaults(helper_reads.root, helper_paths)
+    if defaults is None or any(defaults[path] != value for path, value in helper_reads.values.items()):
+        return None
     narrow_args_hash = compute_narrow_args_hash(
         raise_on_templated_floats, kernel_source_info, py_args, arg_metas, key_paths
     )
@@ -268,11 +288,12 @@ def persist_l1_and_set_l2_key(
         l1_entry is None
         or key_paths != l1_entry.used_py_dataclass_parameters
         or config_fields != l1_entry.config_fields
+        or helper_paths != l1_entry.helper_paths
     ):
-        store_pruning_info(l1_key, visited_functions, key_paths, config_fields, graph_do_while_levels)
+        store_pruning_info(l1_key, visited_functions, key_paths, config_fields, helper_paths, graph_do_while_levels)
     if narrow_args_hash is None:
         return None
-    return make_full_cache_key(l1_key, narrow_args_hash, config_values)
+    return make_full_cache_key(l1_key, narrow_args_hash, config_values, defaults)
 
 
 def load_pruning_info(source_config_key: str) -> L1CacheValue | None:
