@@ -49,7 +49,7 @@ class SchemaNeedingMemberChecks:
                 continue
             self.member_guards.append((name, member_type))
 
-    def matches(
+    def do_member_check(
         self,
         dataclass_instance: "DataclassInstance",
         path: str,

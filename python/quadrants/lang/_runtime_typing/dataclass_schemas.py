@@ -234,7 +234,7 @@ def cached_infer_dataclass_schema(
     if cached_schema_entry is not None and not isinstance(cached_schema_entry, SchemaNeedingMemberChecks):
         return cached_schema_entry
 
-    if cached_schema_entry is not None and cached_schema_entry.matches(
+    if cached_schema_entry is not None and cached_schema_entry.do_member_check(
         dataclass_instance, path, ancestor_ids, infer_member_type
     ):
         return cached_schema_entry.schema
