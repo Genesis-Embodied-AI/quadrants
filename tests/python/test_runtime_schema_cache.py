@@ -11,6 +11,9 @@ from quadrants.lang._runtime_typing.dataclass_schemas import (
     cached_infer_dataclass_schema,
     infer_member_type,
 )
+from quadrants.lang._runtime_typing.runtime_dataclass_guards import (
+    SchemaNeedingMemberChecks,
+)
 
 from tests.helpers import test_utils
 
@@ -86,7 +89,7 @@ def test_inferred_member_check_requirements() -> None:
         (1, False),
         (1.0, False),
         (np.int32(1), False),
-        (np.zeros(2), True),
+        (np.zeros(2), False),
         (tensor, False),
         (tensor._unwrap(), False),
         (qd.Vector([1, 2]), True),
@@ -100,3 +103,33 @@ def test_inferred_member_check_requirements() -> None:
     ):
         _, needs_member_check = infer_member_type(py_obj, "state.value", frozenset())
         assert needs_member_check is expected, type(py_obj)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_numpy_members_do_not_need_schema_checks() -> None:
+    """Array metadata changes preserve its schema type, including inside guarded containers."""
+
+    @dataclass
+    class Mutable:
+        value: object
+
+    @dataclass(frozen=True)
+    class State:
+        array: object
+        other: object
+
+    array = np.zeros(4, dtype=np.float32)
+    state = State(array, None)
+    schema = cached_infer_dataclass_schema(state, "state")
+    assert not schema._qd_needs_member_check
+    array.shape = (2, 2)
+    array.dtype = np.int32
+    assert cached_infer_dataclass_schema(state, "state") is schema
+
+    guarded = State(array, Mutable(1))
+    cached_infer_dataclass_schema(guarded, "state")
+    entries = _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(guarded)
+    assert entries is not None
+    entry = next(iter(entries.values()))
+    assert isinstance(entry, SchemaNeedingMemberChecks)
+    assert [name for name, _ in entry.member_guards] == ["other"]

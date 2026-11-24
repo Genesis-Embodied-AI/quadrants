@@ -194,10 +194,10 @@ def infer_member_type(
     if isinstance(py_obj, Field):
         return Tensor, False
 
-    if isinstance(py_obj, Ndarray):
+    if isinstance(py_obj, (Ndarray, np.ndarray)):
         return _array_annotation, False
 
-    if isinstance(py_obj, (AnyArray, np.ndarray)):
+    if isinstance(py_obj, AnyArray):
         return _array_annotation, True
 
     # Avoid importing torch on the inference path when it is not already in use.

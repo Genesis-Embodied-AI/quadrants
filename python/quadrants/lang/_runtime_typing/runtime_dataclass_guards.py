@@ -45,7 +45,7 @@ class SchemaNeedingMemberChecks:
             if hasattr(member_type, "_qd_underlying_dataclass"):
                 if not cast("type[RuntimeDataclassSchema]", member_type)._qd_needs_member_check:
                     continue
-            elif child is None or isinstance(child, (bool, int, float, np.generic, Ndarray, Field)):
+            elif child is None or isinstance(child, (bool, int, float, np.generic, np.ndarray, Ndarray, Field)):
                 continue
             self.member_guards.append((name, member_type))
 
