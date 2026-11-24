@@ -241,9 +241,9 @@ def _infer_dataclass_runtime_member_types(
     """
     dataclass_type = type(dataclass_instance)
     params = getattr(dataclass_type, "__dataclass_params__")
-    container_prevents_rebinding = params.frozen or params.unsafe_hash
+    frozen = params.frozen or params.unsafe_hash
     final_non_frozen_path = non_frozen_ancestor_path
-    if not container_prevents_rebinding:
+    if not frozen:
         final_non_frozen_path = dataclass_type.__name__
     stable = params.frozen
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
@@ -257,7 +257,7 @@ def _infer_dataclass_runtime_member_types(
         else:
             child = getattr(dataclass_instance, name)
             child_non_frozen_ancestor_path = None
-            if not container_prevents_rebinding:
+            if not frozen:
                 child_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
             elif non_frozen_ancestor_path is not None:
                 child_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
