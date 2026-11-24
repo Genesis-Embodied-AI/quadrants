@@ -138,6 +138,7 @@ def infer_member_type(
         return cached_infer_dataclass_schema(
             py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
         )
+
     if is_data_oriented(py_obj):
         return create_deferred_member_type_for_invalid_dataclass_member(
             QuadrantsRuntimeTypeError,
@@ -145,28 +146,38 @@ def infer_member_type(
             "Store the dataclass on the data-oriented object instead.",
             py_obj,
         )
+
     if py_obj is None:
         return Tensor
+
     if isinstance(py_obj, Field):
         return Tensor
+
     if isinstance(py_obj, (Ndarray, AnyArray, np.ndarray)):
         return _array_annotation
+
     # Avoid importing torch on the inference path when it is not already in use.
     import sys  # pylint: disable=import-outside-toplevel
 
     torch = sys.modules.get("torch")
     if torch is not None and isinstance(py_obj, torch.Tensor):
         return _array_annotation
+
     if isinstance(py_obj, BufferView):
         return _buffer_annotation
+
     if isinstance(py_obj, (bool, np.bool_)):
         return primitive_types.u1
+
     if isinstance(py_obj, np.generic):
         return to_quadrants_type(py_obj.dtype)
+
     if isinstance(py_obj, int):
         return impl.get_runtime().default_ip
+
     if isinstance(py_obj, float):
         return impl.get_runtime().default_fp
+
     if isinstance(py_obj, Matrix):
         dtype = to_quadrants_type(np.asarray(py_obj.to_numpy()).dtype)
         key = (py_obj.n, py_obj.m, py_obj.ndim, dtype)
@@ -175,15 +186,18 @@ def infer_member_type(
                 VectorType(py_obj.n, dtype) if py_obj.ndim == 1 else MatrixType(py_obj.n, py_obj.m, py_obj.ndim, dtype)
             )
         return _matrix_types[key]
+
     if isinstance(py_obj, Struct):
         declared = getattr(py_obj, "_qd_struct_type", None)
         if declared is not None:
             return declared
+
         members = {name: infer_member_type(child, f"{path}.{name}", ancestor_ids) for name, child in py_obj.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())
         if key not in _struct_types:
             _struct_types[key] = StructType(**members)
         return _struct_types[key]
+
     return create_deferred_member_type_for_invalid_dataclass_member(
         QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}", py_obj
     )
@@ -218,8 +232,10 @@ def cached_infer_dataclass_schema(
     if isinstance(cached_schema, SchemaNeedingMemberChecks):
         if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
             return cached_schema.schema
+
     elif cached_schema is not None:
         return cached_schema
+
     plan = _field_names_and_final_by_dataclass_type.get(id(dataclass_type))
     if plan is None:
         field_names_and_final = tuple(
@@ -324,6 +340,7 @@ def cached_infer_dataclass_schema(
             except TypeError:
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
+
         schema_by_context[inference_context_key] = (
             schema
             if stable
@@ -373,6 +390,7 @@ def prepare_kernel_dataclass_args_for_mapper(
         and kernel.mapper._mapping_cache_tracker.get(args_hash)
     ):
         return None
+
     if kernel._runtime_metadata_defaults is not None and kernel._runtime_metadata_defaults != defaults:
         kernel.mapper._mapping_cache.clear()
         kernel.mapper._mapping_cache_tracker.clear()
