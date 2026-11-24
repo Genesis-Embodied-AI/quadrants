@@ -202,6 +202,7 @@ def cached_infer_dataclass_schema(
     """
     if id(dataclass_instance) in ancestor_ids:
         raise QuadrantsRuntimeTypeError(f"Dataclass member {path!r} contains a cycle")
+
     ancestor_ids = ancestor_ids | {id(dataclass_instance)}
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
