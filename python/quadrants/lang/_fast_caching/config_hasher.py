@@ -7,6 +7,8 @@ EXCLUDE_PREFIXES = ["_", "offline_cache", "print_", "verbose_"]
 # Exact key names that do not feed codegen. Matched by full name rather than by prefix, so that config fields added
 # later under the same prefix (say a new cuda_* compiler option) are not silently dropped from the cache key.
 EXCLUDE_KEYS = {
+    # The runtime seeds the random generator. Python compile-time reads enter the L2 key instead.
+    "random_seed",
     # Destination directory for IR dumps only. Whether anything is dumped is gated on the QD_DUMP_IR env var, which is
     # not part of the cache key either, so the path cannot influence the generated kernel.
     "debug_dump_path",
@@ -27,8 +29,8 @@ def hash_compile_config() -> str:
 
     If any compilation-relevant value in the compiler config changes, the hash string changes too. Keys that only
     affect debug output or runtime device limits are excluded, via EXCLUDE_PREFIXES and EXCLUDE_KEYS, so that they do
-    not cause spurious cache misses. The C++ offline cache key does not include them either, see
-    get_offline_cache_key_of_compile_config in quadrants/analysis/offline_cache_util.cpp.
+    not cause spurious cache misses. Compile-time reads of these fields enter the Python L2 key.
+    The separate C++ offline cache key still includes random_seed.
     """
     config = impl.get_runtime().prog.config()
     config_l = []

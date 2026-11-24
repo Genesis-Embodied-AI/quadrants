@@ -41,7 +41,7 @@ from quadrants.lang import impl, runtime_ops
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
-from quadrants.lang._fast_caching import src_hasher
+from quadrants.lang._fast_caching import config_reads, src_hasher
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
@@ -401,6 +401,7 @@ class Kernel(FuncBase):
         self.runtime = impl.get_runtime()
         self.materialized_kernels = {}
         self.compiled_kernel_data_by_key = {}
+        self._fast_checksums_by_key: dict[CompiledKernelKeyType, str] = {}
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
@@ -414,37 +415,37 @@ class Kernel(FuncBase):
         pass 1 runs in ``only_parse_function_def`` mode and never enters a callee body; otherwise the build fails
         looking up callee variables in an empty used-set ("Name __qd_... is not defined").
 
-        Sets ``self._l1_key``, ``self._pruning_paths_from_l1`` and ``self.fast_checksum``, all read after the compile
-        by ``_maybe_persist_l1_and_set_l2_key``.
+        Sets ``self._l1_key`` and ``self._l1_entry``, which cold compilation uses to derive the final L2 key.
         """
         self._l1_key = None  # type: ignore[attr-defined]
-        self._pruning_paths_from_l1 = None  # type: ignore[attr-defined]
-        self.fast_checksum = None
+        self._l1_entry = None  # type: ignore[attr-defined]
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self._kernel_source_info_cached = kernel_source_info  # reused by materialize / launch_kernel
             self._l1_key = src_hasher.make_source_config_key(kernel_source_info)
 
-            # Phase 1: L1 lookup - pruning info only, no args walk yet.
-            pruning_paths, cached_graph_do_while_levels = src_hasher.load_pruning_info(self._l1_key)
-            if pruning_paths is None:
+            # Phase 1: load pruning paths and config fields without an args walk.
+            self._l1_entry = src_hasher.load_pruning_info(self._l1_key)
+            if self._l1_entry is None:
                 # ``cache_key_generated`` stays False: it means "fastcache produced a valid L2 args hash", and whether
                 # the narrow args walk will succeed isn't known until after the compile.
                 return None
-            self._pruning_paths_from_l1 = pruning_paths
+            pruning_paths = self._l1_entry.used_py_dataclass_parameters
+            cached_graph_do_while_levels = self._l1_entry.graph_do_while_levels
 
-            # Phase 2: narrow args hash + L2 lookup.
+            # Phase 2: hash the narrow args and the current config values for the L2 lookup.
             narrow_args_hash = src_hasher.compute_narrow_args_hash(
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, pruning_paths
             )
             if narrow_args_hash is None:
-                # Recognised-but-unsupported tensor-like (Field / MatrixField): leaving ``fast_checksum`` None keeps any
-                # L2 entry from being written for this call.
                 return None
-            self.fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash)
+            config_values = config_reads.read_config_values(self._l1_entry.config_fields)
+            if config_values is None:
+                return None
+            fast_checksum = src_hasher.make_full_cache_key(self._l1_key, narrow_args_hash, config_values)
             self.src_ll_cache_observations.cache_key_generated = True
 
-            cache_value = src_hasher.load(self.fast_checksum)
+            cache_value = src_hasher.load(fast_checksum)
             if cache_value is not None:
                 frontend_cache_key = cache_value.frontend_cache_key
                 self.src_ll_cache_observations.cache_validated = True
@@ -490,7 +491,7 @@ class Kernel(FuncBase):
                         ]
                     return cache_value.used_py_dataclass_parameters
             # L2 miss or artifact load failed: report cold, so ``materialize`` runs pass 0 + pass 1 and populates
-            # per-callee pruning info. ``fast_checksum`` stays set, so a fresh L2 entry is written after the compile.
+            # per-callee pruning info. The compile derives a new L2 key from the complete read set.
             # L1's level table seeds the cold-compile path until the AST transformer repopulates it.
             if cached_graph_do_while_levels and not self.graph_do_while_levels:
                 self.graph_do_while_levels = [
@@ -554,34 +555,36 @@ class Kernel(FuncBase):
             range_begin = 0 if used_py_dataclass_parameters is None else 1
             runtime = impl.get_runtime()
             kernel_ctx = KernelCompileContext(self, pruning, key)
+            reads = config_reads.ConfigReads() if self._l1_key and used_py_dataclass_parameters is None else None
             for _pass in range(range_begin, 2):
                 kernel_ctx.current_pass = KernelCompilePassContext(_pass)
                 if _pass == 0:
                     pruning.pass_0_ran = True
                 if _pass >= 1:
                     pruning.enforce()
-                tree, ctx = self.get_tree_and_ctx(
-                    kernel_compile_context=kernel_ctx,
-                    py_args=py_args,
-                    template_slot_locations=self.template_slot_locations,
-                    arg_features=arg_features,
-                )
-                runtime._current_kernel_compile_context = ctx.kernel_compile_context
+                with config_reads.collect_config_reads(reads):
+                    tree, ctx = self.get_tree_and_ctx(
+                        kernel_compile_context=kernel_ctx,
+                        py_args=py_args,
+                        template_slot_locations=self.template_slot_locations,
+                        arg_features=arg_features,
+                    )
+                    runtime._current_kernel_compile_context = ctx.kernel_compile_context
 
-                if self.autodiff_mode != _NONE:
-                    KernelSimplicityASTChecker(self.func).visit(tree)
+                    if self.autodiff_mode != _NONE:
+                        KernelSimplicityASTChecker(self.func).visit(tree)
 
-                quadrants_ast_generator = ASTGenerator(
-                    ctx=ctx,
-                    kernel_name=kernel_name,
-                    current_kernel=self,
-                    only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
-                    tree=tree,
-                    dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
-                )
-                quadrants_kernel = impl.get_runtime().prog.create_kernel(
-                    quadrants_ast_generator, kernel_name, self.autodiff_mode
-                )
+                    quadrants_ast_generator = ASTGenerator(
+                        ctx=ctx,
+                        kernel_name=kernel_name,
+                        current_kernel=self,
+                        only_parse_function_def=self.compiled_kernel_data_by_key.get(key) is not None,
+                        tree=tree,
+                        dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
+                    )
+                    quadrants_kernel = impl.get_runtime().prog.create_kernel(
+                        quadrants_ast_generator, kernel_name, self.autodiff_mode
+                    )
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
@@ -620,11 +623,13 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_kernel_compile_context = None
 
-            self._maybe_persist_l1_and_set_l2_key(key, py_args)
+            if reads is not None:
+                self._maybe_persist_l1_and_set_l2_key(key, py_args, reads)
 
-    def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
-        """Thin delegate to ``src_hasher.persist_l1_and_set_l2_key``; see that function's docstring for behaviour."""
-        new_fast_checksum, generated = src_hasher.persist_l1_and_set_l2_key(
+    def _maybe_persist_l1_and_set_l2_key(
+        self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...], reads: config_reads.ConfigReads
+    ) -> None:
+        fast_checksum = src_hasher.persist_l1_and_set_l2_key(
             l1_key=getattr(self, "_l1_key", None),
             kernel_source_info=getattr(self, "_kernel_source_info_cached", None),
             used_py_dataclass_parameters=self.used_py_dataclass_parameters_by_key_enforcing.get(key),
@@ -633,15 +638,14 @@ class Kernel(FuncBase):
                 (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id) for level in self.graph_do_while_levels
             ]
             or None,
-            pruning_paths_from_l1=getattr(self, "_pruning_paths_from_l1", None),
-            fast_checksum=self.fast_checksum,
+            l1_entry=self._l1_entry,
+            config_reads=reads,
             raise_on_templated_floats=self.raise_on_templated_floats,
             py_args=py_args,
             arg_metas=self.arg_metas,
         )
-        # Assigned even when ``generated`` is False: that is also how a re-keyed L2 entry comes back.
-        self.fast_checksum = new_fast_checksum
-        if generated:
+        if fast_checksum is not None:
+            self._fast_checksums_by_key[key] = fast_checksum
             self.src_ll_cache_observations.cache_key_generated = True
 
     def launch_kernel(
@@ -818,10 +822,11 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
-                if self.fast_checksum:
+                fast_checksum = self._fast_checksums_by_key.get(key)
+                if fast_checksum is not None:
                     src_hasher.store(
                         compile_result.cache_key,
-                        self.fast_checksum,
+                        fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         graph_do_while_levels=[  # type: ignore[reportCallIssue]

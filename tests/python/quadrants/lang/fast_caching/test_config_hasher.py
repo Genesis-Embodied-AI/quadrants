@@ -16,7 +16,7 @@ def test_config_hasher():
     qd_init_same_arch()
     h_same = config_hasher.hash_compile_config()
 
-    qd_init_same_arch(random_seed=123)
+    qd_init_same_arch(debug=True)
     h_diff = config_hasher.hash_compile_config()
 
     assert h_base == h_same
@@ -29,6 +29,9 @@ def test_config_hasher_ignores_debug_and_runtime_only_keys():
 
     qd_init_same_arch()
     h_base = config_hasher.hash_compile_config()
+
+    qd.cfg.random_seed += 1
+    assert config_hasher.hash_compile_config() == h_base
 
     # Only selects where IR dumps are written, and only when QD_DUMP_IR is set.
     qd.cfg.debug_dump_path = "/tmp/some-other-ir-dump-dir/"

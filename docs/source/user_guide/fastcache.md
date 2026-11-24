@@ -34,6 +34,10 @@ That's it. On the first call, the kernel compiles normally and the fastcache ent
 
 ### Runtime configuration
 
+A change to `random_seed` does not prevent a fastcache hit if the kernel does not read the seed during compilation. `qd.random()` uses the seed of the current program, even on a fastcache hit.
+
+If Python code reads a program or default config field during kernel compilation, fastcache includes the field value in the key. If fastcache cannot identify the config object or track its reads, it skips the fastcache entry. For example, if another kernel already compiled a `@qd.real_func` body, the caller cannot observe its config reads. These rules do not change the native offline cache or the purity checks.
+
 Fastcache requires the offline cache to be enabled (which it is by default). Two `qd.init` options are relevant:
 
 | Option | Default | Effect |
