@@ -35,7 +35,7 @@ from quadrants.lang._runtime_typing.types import (
     InferenceContextKey,
     InferredMemberType,
     RuntimeDataclassSchema,
-    is_schema,
+    is_runtime_dataclass_schema,
 )
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.any_array import AnyArray
@@ -263,7 +263,7 @@ def _infer_dataclass_runtime_member_types(
             member_type = infer_member_type(
                 child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
-            if is_schema(member_type):
+            if is_runtime_dataclass_schema(member_type):
                 needs_member_check |= member_type._qd_needs_member_check
             elif (
                 child is not None

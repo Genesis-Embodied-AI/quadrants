@@ -28,7 +28,7 @@ class RuntimeDataclassSchema(DataclassInstance, Protocol):
     _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
 
-def is_schema(py_obj: object) -> TypeGuard[type[RuntimeDataclassSchema]]:
+def is_runtime_dataclass_schema(py_obj: object) -> TypeGuard[type[RuntimeDataclassSchema]]:
     """Recognize a generated dataclass schema class by its schema metadata."""
     return isinstance(py_obj, type) and hasattr(py_obj, "_qd_underlying_dataclass")
 
