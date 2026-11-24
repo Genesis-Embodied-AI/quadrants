@@ -78,7 +78,7 @@ Sub-functions called by the kernel are also checked - they must not capture exte
 
 Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit kernel parameter, and the compiler resolves each accessed member at compile time - either passing it as a real kernel argument (e.g. a `qd.ndarray` member) or compiling it into the kernel (e.g. a primitive or `qd.field` member); see [Compound-type cache keying](#compound-type-cache-keying) for exactly how each member kind is treated and keyed. Either way the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.
 
-The same holds for a [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) passed as a typed parameter: the compiler flattens each declared field into its own kernel parameter, so `params.dt` inside the kernel is a parameter access, not capture. By default a primitive field is passed as a runtime scalar argument - only its type enters the fastcache key, not its value (to bake the value in instead, mark the field with `FIELD_METADATA_CACHE_VALUE`, a dataclass field-metadata flag that Quadrants exports) - and an ndarray field becomes a runtime external tensor. See [Compound-type cache keying](#compound-type-cache-keying) for the full keying rules, including the exact form of that annotation.
+The same holds for a [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) passed as a typed parameter: the compiler flattens each declared field into its own kernel parameter, so `params.dt` inside the kernel is a parameter access, not capture. By default a primitive field is passed as a runtime scalar argument - only its type enters the fastcache key, not its value (to bake the value in instead, annotate the field with [`Final[T]`](compound_types.md#compile-time-constant-fields-typingfinal)) - and an ndarray field becomes a runtime external tensor. See [Compound-type cache keying](#compound-type-cache-keying) for the full keying rules, including the exact form of that annotation.
 
 **Exemptions:** The following may be accessed from the enclosing scope without violating purity:
 
@@ -101,7 +101,7 @@ Fastcache supports the following parameter types:
 | `qd.types.NDArray` (scalar, vector, matrix) | Yes | dtype, ndim, layout |
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
-| [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
+| [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) | Yes | member types recursively; member values if annotated with `Final[T]` (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
 | [`@qd.data_oriented`](compound_types.md#qddata_oriented) objects | Yes | member types recursively; primitive member types and values baked into kernel, unless declared `template_primitives=False`, in which case primitive members contribute their *type* only (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
@@ -183,18 +183,18 @@ As part of generating the fastcache cache key, fastcache hashes each kernel para
 - Nested `dataclasses.dataclass` member - recurses (with the dataclass rules below).
 - `qd.field` member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted. See [Why `qd.field` disables fastcache](#why-qdfield-disables-fastcache) for the reason.
 
-**`dataclasses.dataclass`:** each declared member is hashed. For each member, only the *type* is included in the cache key by default - **not** the value. To include a member's value, annotate it:
+**`dataclasses.dataclass`:** ordinary members contribute their types, not their runtime values. Fields annotated with [`Final[T]`](compound_types.md#compile-time-constant-fields-typingfinal) are compile-time constants, so their values also contribute to the cache key:
 
 ```python
 import dataclasses
-from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
+from typing import Final
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class SimConfig:
-    num_layers: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-    dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+    num_layers: Final[int]
+    dt: float
 ```
 
-This is necessary whenever a member's *value* is baked into a compiled kernel, in some way, rather than just its type. Typically this is by using [@qd.static](static.md), within the kernel.
+Here, `num_layers` is a compile-time constant and can be used in [`qd.static(...)`](static.md). `dt` remains a runtime scalar parameter; its value does not enter the cache key.
 
-Note the asymmetry: `@qd.data_oriented` primitive member values are baked into the kernel automatically (same semantics as `qd.Template`); `dataclasses.dataclass` members contribute only their *type* to the cache key unless you opt in per-member.
+By default, `@qd.data_oriented` primitive members are compile-time constants. Python dataclass members are runtime parameters unless explicitly marked `Final[T]`.

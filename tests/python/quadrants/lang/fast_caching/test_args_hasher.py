@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE, args_hasher
+from quadrants.lang._fast_caching import args_hasher
 from quadrants.lang._fast_caching.args_hasher import FastcacheSkip
 from quadrants.lang._runtime_typing.runtime_dataclass import (
     cached_infer_dataclass_schema,
@@ -315,22 +315,6 @@ def test_cache_values_unchecked() -> None:
     base = MyConfigNoChecked(some_int_unchecked=3)
     same = MyConfigNoCheckedSame(some_int_unchecked=6)
     diff = MyConfigNoCheckedDiff(some_int_new=3)
-
-    h_base = _hash_dataclass(base)
-    assert isinstance(h_base, str)
-    assert h_base == _hash_dataclass(same)
-    assert h_base != _hash_dataclass(diff)
-
-
-@test_utils.test()
-def test_cache_values_checked() -> None:
-    @dataclasses.dataclass
-    class MyConfigChecked:
-        some_int_checked: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-
-    base = MyConfigChecked(some_int_checked=5)
-    same = MyConfigChecked(some_int_checked=5)
-    diff = MyConfigChecked(some_int_checked=7)
 
     h_base = _hash_dataclass(base)
     assert isinstance(h_base, str)

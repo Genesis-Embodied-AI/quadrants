@@ -43,8 +43,6 @@ g_repr_time = 0
 g_num_ignored_calls = 0
 
 
-FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
-
 LaunchArgSchemas: TypeAlias = Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]
 LaunchArgSchemaByIndexAndPath: TypeAlias = Mapping[tuple[str, ...], type[RuntimeDataclassSchema]]
 
@@ -279,10 +277,7 @@ def dataclass_to_repr(
             return _FAIL_FASTCACHE
         if id(field.type) in primitive_types.type_ids:
             _repr = f"{field.type}:{_repr}"
-        full_repr = f"{field.name}: ({_repr})"
-        if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
-            full_repr += f" = {child_value}"
-        repr_l.append(full_repr)
+        repr_l.append(f"{field.name}: ({_repr})")
     return "[" + ",".join(repr_l) + "]"
 
 
