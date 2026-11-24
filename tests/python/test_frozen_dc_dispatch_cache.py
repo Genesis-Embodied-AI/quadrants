@@ -189,8 +189,8 @@ def test_frozen_dc_unwrapped_cache_populated():
     assert cached["a"] is a
 
 
-# --------------------------------------------------------------------------- Template-key cache: verify
-# _qd_specialization_signature is cached per annotated type (covariant reuse).
+# ---------------------------------------------------------------------------
+# Template-key cache: verify _qd_specialization_signature is cached per annotated type (covariant reuse).
 # ---------------------------------------------------------------------------
 
 
