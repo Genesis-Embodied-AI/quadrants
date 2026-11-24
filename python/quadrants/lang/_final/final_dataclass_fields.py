@@ -18,8 +18,10 @@ from quadrants.lang._runtime_typing.deferred_errors import (
 if TYPE_CHECKING:
     from typing import _SpecialForm
 
-    from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
-    from quadrants.lang._runtime_typing.types import FinalValueKeyCache
+    from quadrants.lang._runtime_typing.types import (
+        DeferredMemberType,
+        FinalValueKeyCache,
+    )
 
 # typing.Final is a marker object, not an ordinary Python class like int.
 # Its runtime implementation is called _SpecialForm.

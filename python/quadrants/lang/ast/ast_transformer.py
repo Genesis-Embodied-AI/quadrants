@@ -21,7 +21,7 @@ from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     reject_undiscovered_dataclass_member,
 )
-from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
+from quadrants.lang._runtime_typing.types import DeferredMemberType
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     Builder,

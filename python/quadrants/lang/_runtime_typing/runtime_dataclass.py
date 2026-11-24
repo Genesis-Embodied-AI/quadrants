@@ -23,12 +23,12 @@ from quadrants.lang._final.final_dataclass_fields import (
 )
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.deferred_errors import (
-    DeferredMemberType,
     create_deferred_member_type_for_invalid_dataclass_member,
 )
 from quadrants.lang._runtime_typing.runtime_dataclass_guards import FrozenSchemaEntry
 from quadrants.lang._runtime_typing.types import (
     DataclassInstance,
+    DeferredMemberType,
     FinalValueKeyCache,
     InferenceContextKey,
     InferredMemberType,

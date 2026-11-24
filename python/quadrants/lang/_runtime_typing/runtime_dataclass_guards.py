@@ -14,9 +14,9 @@ if TYPE_CHECKING:
     import dataclasses
     from typing import _SpecialForm
 
-    from quadrants.lang._runtime_typing.deferred_errors import DeferredMemberType
     from quadrants.lang._runtime_typing.types import (
         DataclassInstance,
+        DeferredMemberType,
         InferredMemberType,
         RuntimeDataclassSchema,
     )

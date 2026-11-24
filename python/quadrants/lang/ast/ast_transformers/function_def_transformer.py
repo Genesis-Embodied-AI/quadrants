@@ -32,10 +32,7 @@ from quadrants.lang._name_utils import (
     dotted_argument_path_from_flat_name,
 )
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
-from quadrants.lang._runtime_typing.deferred_errors import (
-    DeferredMemberError,
-    DeferredMemberType,
-)
+from quadrants.lang._runtime_typing.types import DeferredMemberError, DeferredMemberType
 from quadrants.lang._template_mapper_hotpath import _extract_arg
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,

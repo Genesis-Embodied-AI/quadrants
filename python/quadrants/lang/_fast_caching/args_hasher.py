@@ -19,8 +19,7 @@ from .._final.final_dataclass_fields import final_field_names
 from .._name_utils import create_flat_name
 from .._ndarray import ScalarNdarray
 from .._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
-from .._runtime_typing.deferred_errors import DeferredMemberType
-from .._runtime_typing.types import RuntimeDataclassSchema
+from .._runtime_typing.types import DeferredMemberType, RuntimeDataclassSchema
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
