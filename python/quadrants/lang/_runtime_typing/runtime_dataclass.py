@@ -60,7 +60,7 @@ class RuntimeDataclassSchema(DataclassInstance, Protocol):
     _qd_runtime_underlying_dataclass: ClassVar[type[DataclassInstance]]
     # Inferred member types can be reused without guards; frozen=True on the original class alone is insufficient.
     _qd_runtime_frozen: ClassVar[bool]
-    _qd_runtime_has_deferred: ClassVar[bool]
+    _qd_runtime_has_deferred_errors: ClassVar[bool]
     _qd_runtime_key: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
 
@@ -235,7 +235,7 @@ def cached_infer_dataclass_schema(
             ):
                 stable = False
         has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
-            member_type, "_qd_runtime_has_deferred", False
+            member_type, "_qd_runtime_has_deferred_errors", False
         )
         member_types.append(member_type)
     # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
@@ -269,7 +269,7 @@ def cached_infer_dataclass_schema(
                     "__hash__": dataclass_type.__hash__,
                     "_qd_runtime_underlying_dataclass": dataclass_type,
                     "_qd_runtime_frozen": stable,
-                    "_qd_runtime_has_deferred": has_deferred,
+                    "_qd_runtime_has_deferred_errors": has_deferred,
                     # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                     # must share a specialization.
                     "_qd_runtime_key": (
@@ -354,7 +354,7 @@ def prepare_kernel_dataclass_args_for_mapper(
     for meta in kernel.arg_metas:
         schema = meta.annotation
         if hasattr(schema, "_qd_runtime_underlying_dataclass"):
-            has_deferred |= schema._qd_runtime_has_deferred
+            has_deferred |= schema._qd_runtime_has_deferred_errors
             unstable |= not schema._qd_runtime_frozen
     kernel._runtime_has_deferred = has_deferred
     kernel.template_slot_locations = [
