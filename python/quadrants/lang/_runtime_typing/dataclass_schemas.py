@@ -231,12 +231,11 @@ def cached_infer_dataclass_schema(
         if schema_by_numeric_defaults_and_ancestor_path is not None
         else None
     )
-    if isinstance(cached_schema, SchemaNeedingMemberChecks):
-        if cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
-            return cached_schema.schema
-
-    elif cached_schema is not None:
+    if cached_schema is not None and not isinstance(cached_schema, SchemaNeedingMemberChecks):
         return cached_schema
+
+    if cached_schema is not None and cached_schema.matches(dataclass_instance, path, ancestor_ids, infer_member_type):
+        return cached_schema.schema
 
     plan = _field_names_and_final_by_dataclass_type.get(id(dataclass_type))
     if plan is None:
