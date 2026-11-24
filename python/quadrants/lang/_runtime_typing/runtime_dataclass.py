@@ -61,7 +61,7 @@ class RuntimeDataclassSchema(DataclassInstance, Protocol):
     # Inferred member types can be reused without guards; frozen=True on the original class alone is insufficient.
     _qd_runtime_frozen: ClassVar[bool]
     _qd_runtime_has_deferred_errors: ClassVar[bool]
-    _qd_runtime_key: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
+    _qd_type_signature: ClassVar[tuple[int, tuple[tuple[str, Any], ...]]]
 
 
 # Object identity maps to the retained object and its type-tagged Final specialization key.
@@ -272,10 +272,10 @@ def cached_infer_dataclass_schema(
                     "_qd_runtime_has_deferred_errors": has_deferred,
                     # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                     # must share a specialization.
-                    "_qd_runtime_key": (
+                    "_qd_type_signature": (
                         id(dataclass_type),
                         tuple(
-                            (name, getattr(field.type, "_qd_runtime_key", id(field.type)))
+                            (name, getattr(field.type, "_qd_type_signature", id(field.type)))
                             for name, field in fields.items()
                         ),
                     ),

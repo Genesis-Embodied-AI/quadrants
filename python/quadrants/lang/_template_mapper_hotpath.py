@@ -516,13 +516,13 @@ class RuntimeDataclassFeatures(tuple):
 
     def __hash__(self) -> int:
         """Hash the inferred schema key together with the field features."""
-        return hash((self.schema._qd_runtime_key, tuple(self)))
+        return hash((self.schema._qd_type_signature, tuple(self)))
 
     def __eq__(self, other: object) -> bool:
         """Compare both inferred schema keys and field features."""
         return (
             type(other) is type(self)
-            and self.schema._qd_runtime_key == other.schema._qd_runtime_key
+            and self.schema._qd_type_signature == other.schema._qd_type_signature
             and tuple.__eq__(self, other)
         )
 
