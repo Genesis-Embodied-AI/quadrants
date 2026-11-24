@@ -277,10 +277,10 @@ def _infer_dataclass_runtime_member_types(
                 member_non_frozen_ancestor_path = f"{dataclass_type.__name__}.{name}"
             elif non_frozen_ancestor_path is not None:
                 member_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
-            member_type, member_needs_check = infer_member_type(
+            member_type, _needs_member_check = infer_member_type(
                 member, f"{path}.{name}", ancestor_ids, member_non_frozen_ancestor_path, final_value_key_by_value_id
             )
-            needs_member_check |= member_needs_check
+            needs_member_check |= _needs_member_check
         has_deferred_error |= isinstance(member_type, DeferredMemberType) or getattr(
             member_type, "_qd_has_deferred_errors", False
         )
