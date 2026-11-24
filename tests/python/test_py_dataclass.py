@@ -4350,7 +4350,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     # An enum whose member value is mutable/unsupported (e.g. a ``list``) is rejected too, since the value is routed
     # through ``validate_value_for_final_field_and_get_key`` and a mutable value could silently change under the cached
-    # spec key.
+    # compilation key.
     class ListValued(enum.Enum):
         A = [1, 2, 3]
 
