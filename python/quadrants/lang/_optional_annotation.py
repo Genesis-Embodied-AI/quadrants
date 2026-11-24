@@ -11,9 +11,9 @@ _NoneType = type(None)
 
 
 class _OptionalAbsent:
-    """Spec-key sentinel for an optional ndarray slot passed ``None``.
+    """Compilation key sentinel for an optional ndarray slot passed ``None``.
 
-    A distinct, hashable singleton so the absent case gets its own specialization key.
+    A distinct, hashable singleton so the absent case gets its own compilation key.
     """
 
     __slots__ = ()

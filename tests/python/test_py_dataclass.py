@@ -3214,7 +3214,7 @@ def test_dataclass_with_template_emits_deprecation_warning():
     ``DeprecationWarning`` at materialize time. The pattern was never an intentional Quadrants pattern (the template
     walker happens to handle dataclass-shaped objects, but the supported annotation is the dataclass type itself).
     The warning is emitted from ``Kernel.materialize`` after the cache-hit early return, so it fires once per
-    (kernel, spec-key) and stays off the steady-state launch hot path. See ``compound_types.md`` Overview."""
+    (kernel, compilation key) and stays off the steady-state launch hot path. See ``compound_types.md`` Overview."""
 
     @dataclass(frozen=True)
     class Foo:
@@ -3464,8 +3464,8 @@ def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
 # - ``config.field`` accessed inside a kernel body resolves at AST-build time to the actual Python value baked into
 #   ``config``. ``qd.static(config.field)`` therefore works, as does ``if qd.static(config.flag): ...`` dead-branch
 #   elimination.
-# - The value of every ``Final[T]`` field is folded into the template mapper's spec key; two configs that differ on
-#   any Final field compile distinct kernels.
+# - The value of every ``Final[T]`` field is folded into the template mapper's compilation key; two configs that differ
+# on any Final field compile distinct kernels.
 # - Final fields are NOT declared as runtime scalar kernel args and are NOT pushed into the launch context.
 # - Fields without ``Final`` retain the current typed-dataclass behavior (declared as runtime scalar / ndarray kernel
 #   args and passed at launch time). Mixing Final and non-Final fields in the same dataclass is supported.
@@ -3508,7 +3508,7 @@ def test_final_field_bakes_as_compile_time_constant_via_qd_static():
 @test_utils.test()
 def test_final_field_value_change_triggers_recompilation():
     """Two ``SimConfig`` instances with different Final-field values must compile as distinct kernels - the Final
-    field's value has to be part of the template mapper spec key, otherwise the second launch would reuse the
+    field's value has to be part of the template mapper compilation key, otherwise the second launch would reuse the
     first's baked-in constant and produce the wrong output."""
     from typing import Final
 
@@ -3560,7 +3560,7 @@ def test_final_field_identical_values_share_compiled_kernel():
     """Kernel caching correctness: two ``SimConfig`` instances with the same Final-field value must reuse the same
     compiled kernel. Two consecutive launches with equal Final values keep ``template_mapper.mapping`` size at 1;
     a third launch with a different value grows it to 2. Guards against accidentally hashing the *instance* rather
-    than the *value* in the spec key."""
+    than the *value* in the compilation key."""
     from typing import Final
 
     @dataclass(frozen=True)
@@ -3787,7 +3787,7 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
     ):
         final_field_names(MutableMid)
 
-    # A frozen top level does not launder a mutable class further down: the spec-key walk validates each nested
+    # A frozen top level does not launder a mutable class further down: the compilation key walk validates each nested
     # dataclass type it descends into, so the error still surfaces on the first launch rather than silently baking a
     # value that ``top.mid.child = Inner(n=9)`` could change.
     @qd.kernel
@@ -4029,7 +4029,7 @@ def test_final_float_field_honors_raise_on_templated_floats():
 
 
 @test_utils.test()
-def test_final_float_cached_spec_key_revalidated_after_reinit():
+def test_final_float_cached_compilation_key_revalidated_after_reinit():
     """Revalidate a reused config after qd.init enables raise_on_templated_floats."""
     from typing import Final
 
@@ -4052,10 +4052,11 @@ def test_final_float_cached_spec_key_revalidated_after_reinit():
     cfg = Cfg(dt=0.5, n=3)
 
     # First launch with the option OFF: compiles fine. A Final-bearing config is deliberately never cached, so the
-    # instance carries no ``_qd_spec_key`` to short-circuit (and thus bypass a guard) on later launches.
+    # instance carries no ``_qd_compilation_key`` to short-circuit (and thus bypass a guard) on later launches.
     qd.init(arch=getattr(qd, arch_name))
     run(cfg)
-    assert not hasattr(cfg, "_qd_spec_key")  # Final-bearing config is never cached; every launch recomputes+revalidates
+    # Final-bearing config is never cached; every launch recomputes+revalidates
+    assert not hasattr(cfg, "_qd_compilation_key")
 
     # Re-initialise with the option ON and reuse the SAME instance: the recompute must re-run the guard.
     qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
@@ -4395,7 +4396,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
         final_scalar_key(Arbitrary("a"))
 
     # An enum whose member value is mutable/unsupported (e.g. a ``list``) is rejected too, since the value is routed
-    # through ``final_scalar_key`` and a mutable value could silently change under the cached spec key.
+    # through ``final_scalar_key`` and a mutable value could silently change under the cached compilation key.
     class ListValued(enum.Enum):
         A = [1, 2, 3]
 
@@ -4726,7 +4727,7 @@ def test_final_float_signed_zero_keys_distinct_kernels():
 
 
 @test_utils.test()
-def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
+def test_final_key_field_name_does_not_shadow_internal_compilation_key_cache():
     """A user field named _key must not hide changes to Final constants from kernel selection.
 
     Internal instance caches use the _qd_ prefix to avoid collisions with user fields.
@@ -4755,8 +4756,8 @@ def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
 
 @test_utils.test()
 def test_final_subtree_has_final_fields_predicate():
-    """``subtree_has_final_fields`` gates the per-instance spec-key / offline-repr caches. It must report a ``Final``
-    field anywhere in the *transitive* dataclass subtree, so a Final-free dataclass keeps caching (untouched hot path)
+    """``subtree_has_final_fields`` gates the per-instance compilation key / offline-repr caches. It must report a
+    ``Final`` field anywhere in the *transitive* dataclass subtree, so a Final-free dataclass keeps caching (untouched hot path)
     while any Final-bearing one - even one reaching a ``Final`` leaf only through a nested dataclass - is forced to
     recompute and revalidate each launch."""
     from typing import Final

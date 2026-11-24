@@ -166,7 +166,8 @@ def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dic
     that makes two ancestors compare/hash equal cannot serve the wrong view.
 
     A ``Final``-bearing subtree is exempt from the cache (and from the ``_qd_all_field`` shortcut): like the
-    spec-key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and an
+    compilation key/offline-repr/mapper caches it must re-read every launch so ``Final``-value validation re-runs, and
+    an
     ``unsafe_hash=True`` instance may also mutate an *ordinary* field between launches - a stale cache would keep
     sending the first-launch value. (Such a config always has a non-``Field`` scalar leaf, so ``_qd_all_field`` would
     be ``False`` anyway; leaving it unset defaults to ``False``, i.e. the full ``_recursive_set_args`` path.)
