@@ -234,10 +234,10 @@ def _infer_dataclass_runtime_member_types(
     non_frozen_ancestor_path: str | None,
     final_value_key_by_value_id: FinalValueKeyCache | None,
 ) -> tuple[list[InferredMemberType | DeferredMemberType | "_SpecialForm"], bool, bool]:
-    """Read members and infer their types, returning (member_types, stable, has_deferred).
+    """Read members and infer their types, returning (member_types, needs_member_check, has_deferred).
 
-    stable means the schema needs no member checks before reuse. has_deferred marks errors raised only if a member
-    is used during compilation.
+    needs_member_check means inferred types may need checking before reuse. has_deferred marks errors raised only
+    if a member is used during compilation.
     """
     dataclass_type = type(dataclass_instance)
     params = getattr(dataclass_type, "__dataclass_params__")
@@ -245,12 +245,12 @@ def _infer_dataclass_runtime_member_types(
     final_non_frozen_path = non_frozen_ancestor_path
     if not frozen:
         final_non_frozen_path = dataclass_type.__name__
-    stable = params.frozen
+    needs_member_check = not params.frozen
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
     has_deferred = False
     for name, is_final in field_names_and_final:
         if is_final:
-            stable = False
+            needs_member_check = True
             member_type = infer_final_field_annotation(
                 getattr(dataclass_instance, name), final_non_frozen_path, name, final_value_key_by_value_id
             )
@@ -265,20 +265,20 @@ def _infer_dataclass_runtime_member_types(
                 child, f"{path}.{name}", ancestor_ids, child_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             if dataclasses.is_dataclass(member_type):
-                stable &= getattr(member_type, "_qd_frozen")
+                needs_member_check |= not getattr(member_type, "_qd_frozen")
             elif (
                 child is not None
                 and type(child) not in _TENSOR_WRAPPER_TYPES
                 and not isinstance(child, (bool, int, float, np.generic, Ndarray, Field))
             ):
-                stable = False
+                needs_member_check = True
         has_deferred |= isinstance(member_type, DeferredMemberType) or getattr(
             member_type, "_qd_has_deferred_errors", False
         )
         member_types.append(member_type)
     # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
-    stable &= not has_deferred
-    return member_types, stable, has_deferred
+    needs_member_check |= has_deferred
+    return member_types, needs_member_check, has_deferred
 
 
 def cached_infer_dataclass_schema(
@@ -319,7 +319,7 @@ def cached_infer_dataclass_schema(
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
     params = getattr(dataclass_type, "__dataclass_params__")
-    member_types, stable, has_deferred = _infer_dataclass_runtime_member_types(
+    member_types, needs_member_check, has_deferred = _infer_dataclass_runtime_member_types(
         dataclass_instance,
         field_names_and_final,
         path,
@@ -329,7 +329,7 @@ def cached_infer_dataclass_schema(
     )
     dataclass_type_and_member_types = (
         id(dataclass_type),
-        stable,
+        not needs_member_check,
         tuple((name, id(member_type)) for (name, _), member_type in zip(field_names_and_final, member_types)),
     )
     schema = _schema_by_dataclass_type_and_member_types.get(dataclass_type_and_member_types)
@@ -358,7 +358,7 @@ def cached_infer_dataclass_schema(
                     "__dataclass_params__": params,
                     "__hash__": dataclass_type.__hash__,
                     "_qd_underlying_dataclass": dataclass_type,
-                    "_qd_frozen": stable,
+                    "_qd_frozen": not needs_member_check,
                     "_qd_has_deferred_errors": has_deferred,
                     # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
                     # must share a specialization.
@@ -376,7 +376,9 @@ def cached_infer_dataclass_schema(
         final_field_names(schema)
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
-    if stable or (params.frozen and not has_deferred and not has_final_fields and non_frozen_ancestor_path is None):
+    if not needs_member_check or (
+        params.frozen and not has_deferred and not has_final_fields and non_frozen_ancestor_path is None
+    ):
         if schema_by_numeric_defaults_and_ancestor_path is None:
             schema_by_numeric_defaults_and_ancestor_path = {}
             try:
@@ -389,7 +391,7 @@ def cached_infer_dataclass_schema(
 
         schema_by_numeric_defaults_and_ancestor_path[numeric_defaults_and_ancestor_path] = (
             schema
-            if stable
+            if not needs_member_check
             else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
         )
     return schema
