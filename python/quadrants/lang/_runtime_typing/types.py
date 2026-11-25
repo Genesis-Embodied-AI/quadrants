@@ -185,7 +185,11 @@ class SchemaNeedingMemberChecks:
 
 
 class RuntimeDataclassSpecializationSignature(tuple[Any, ...]):
-    """Store field specialization signatures and the inferred schema for hashing and equality."""
+    """Represent one dataclass argument's specialization signature for in-memory kernel selection.
+
+    The tuple's field signatures and the attached schema's inferred type signature jointly determine hashing and
+    equality. This object is one component of the complete kernel-call signature.
+    """
 
     schema: type[RuntimeDataclassSchema]
 
