@@ -98,12 +98,12 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
 
 
 # Cache nested Final paths by type identity. Retain each type to prevent id reuse.
-_first_final_field_path_by_dataclass_type: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
+_first_direct_or_nested_final_field_path_by_dataclass_type: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
 def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
     """Validate nested dataclass declarations and return the first Final field path, if any."""
-    entry = _first_final_field_path_by_dataclass_type.get(id(dc_type))
+    entry = _first_direct_or_nested_final_field_path_by_dataclass_type.get(id(dc_type))
     if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     # IDs keep custom metaclass equality and hashing out of cycle detection.
@@ -119,7 +119,7 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
                 if child is not None:
                     path = (field.name,) + child
                     break
-    _first_final_field_path_by_dataclass_type[id(dc_type)] = (dc_type, path)
+    _first_direct_or_nested_final_field_path_by_dataclass_type[id(dc_type)] = (dc_type, path)
     return path
 
 
@@ -171,16 +171,16 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
 
 
 # Cache Final field names by type identity. Retain each type to prevent id reuse.
-_validated_final_field_names_by_dataclass_type: "dict[int, tuple[type, frozenset[str]]]" = {}
+_direct_final_field_names_by_dataclass_type: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
 def final_field_names(dc_type: Any) -> "frozenset[str]":
     """Return cached Final field names, validating declarations on the first lookup."""
-    entry = _validated_final_field_names_by_dataclass_type.get(id(dc_type))
+    entry = _direct_final_field_names_by_dataclass_type.get(id(dc_type))
     if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     names = _build_final_plan(dc_type)
-    _validated_final_field_names_by_dataclass_type[id(dc_type)] = (dc_type, names)
+    _direct_final_field_names_by_dataclass_type[id(dc_type)] = (dc_type, names)
     return names
 
 
