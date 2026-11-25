@@ -82,8 +82,8 @@ def create_dataclass_schema(
                 "_qd_underlying_dataclass": dataclass_type,
                 "_qd_needs_member_check": needs_member_check,
                 "_qd_has_deferred_errors": has_deferred_error,
-                # Cache eligibility is not part of the compiled interface: a Tensor wrapper and its bare ndarray
-                # must share a specialization.
+                # Kernel selection compares this signature to reuse compiled code for matching dataclass member types.
+                # Exclude member-check requirements: they affect schema reuse, not the types the kernel receives.
                 "_qd_type_signature": (
                     id(dataclass_type),
                     tuple(
