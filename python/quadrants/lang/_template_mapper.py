@@ -9,6 +9,7 @@ from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
 from quadrants.lang._runtime_typing.dataclass_schemas import (
     prepare_kernel_dataclass_args_for_mapper,
 )
+from quadrants.lang._runtime_typing.types import FinalValueKeyCache
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import get_member_at_path, is_data_oriented
@@ -81,7 +82,12 @@ class TemplateMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...], final_value_key_by_value_id=None) -> Key:
+    def extract(
+        self,
+        raise_on_templated_floats: bool,
+        args: tuple[Any, ...],
+        final_value_key_by_value_id: FinalValueKeyCache | None = None,
+    ) -> Key:
         # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
@@ -104,7 +110,7 @@ class TemplateMapper:
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
-        final_value_key_by_value_id=None,
+        final_value_key_by_value_id: FinalValueKeyCache | None = None,
         runtime_kernel=None,
     ) -> tuple[int, Key]:
         if len(args) != self.num_args:
