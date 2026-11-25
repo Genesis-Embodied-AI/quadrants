@@ -5,7 +5,7 @@ _type_factory = _qd_python_core.get_type_factory_instance()
 
 
 class CompoundType:
-    def from_kernel_struct_ret(self, launch_ctx, index: tuple):
+    def from_kernel_struct_ret(self, launch_ctx, ret_index: tuple):
         raise NotImplementedError()
 
 

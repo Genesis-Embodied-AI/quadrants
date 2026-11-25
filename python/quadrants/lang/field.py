@@ -137,6 +137,7 @@ def _patch_field_dlpack_canonical(capsule, layout):
 
 
 if TYPE_CHECKING:
+    from quadrants.lang._ndarray import Ndarray
     from quadrants.lang.expr import Expr
 
 _ARCH_METAL = _qd_core.Arch.metal
@@ -161,7 +162,7 @@ def _compute_torch_mps_supports_dlpack_bytes_offset() -> bool:
 _TORCH_MPS_SUPPORTS_DLPACK_BYTES_OFFSET = _compute_torch_mps_supports_dlpack_bytes_offset()
 
 
-def _is_aos_struct_member(field: "Field") -> bool:
+def _is_aos_struct_member(field: "Field | Ndarray") -> bool:
     """True when *field* is a member of a multi-member StructField with AOS layout.
 
     AOS struct members have interleaved memory (stride = sizeof(cell)), but the C++ DLPack export emits contiguous
@@ -173,6 +174,9 @@ def _is_aos_struct_member(field: "Field") -> bool:
     (num_ch == 1, each component in its own subtree -- DLPack strides are wrong) or AOS struct member (num_ch > n*m,
     interleaved with other struct members). Only num_ch == n*m (standalone AOS) is safe for zero-copy.
     """
+    if not isinstance(field, Field):
+        return False
+
     try:
         from quadrants.lang.matrix import MatrixField  # pylint: disable=C0415
 
@@ -184,7 +188,7 @@ def _is_aos_struct_member(field: "Field") -> bool:
         return False
 
 
-def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False, is_ndarray: bool = False) -> bool:
+def _can_zerocopy_field(field: "Field | Ndarray", *, is_scalar: bool = False, is_ndarray: bool = False) -> bool:
     """Check whether zero-copy DLPack export is available for this field on the current backend."""
     dtype = field.dtype
     if dtype not in _DLPACK_SUPPORTED_DTYPES:
@@ -202,7 +206,9 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False, is_ndarray: 
     return True
 
 
-def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False, is_ndarray: bool = False):
+def _try_zerocopy_torch(
+    field: "Field | Ndarray", *, copy, device=None, is_scalar: bool = False, is_ndarray: bool = False
+):
     """Try to return a zero-copy torch tensor via DLPack.
 
     Returns the tensor on success. When ``copy is False``, raises ``ValueError`` if zero-copy is not available. When
@@ -263,7 +269,7 @@ class _DLPackV1Adapter:
         return (1, 0)  # kDLCPU = 1
 
 
-def _try_zerocopy_numpy(field: "Field", *, copy, is_scalar: bool = False, is_ndarray: bool = False):
+def _try_zerocopy_numpy(field: "Field | Ndarray", *, copy, is_scalar: bool = False, is_ndarray: bool = False):
     """Try to return a zero-copy numpy array via DLPack.
 
     Returns the array on success, or ``None`` when zero-copy is unsupported and ``copy`` is not ``False``. Raises
@@ -310,6 +316,8 @@ class Field:
     Args:
         vars (List[Expr]): Field members.
     """
+
+    _qd_layout: tuple[int, ...]
 
     def __init__(self, _vars):
         assert all(_vars)
