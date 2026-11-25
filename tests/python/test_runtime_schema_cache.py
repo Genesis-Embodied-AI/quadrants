@@ -119,9 +119,6 @@ def test_inferred_member_check_requirements() -> None:
         assert not schema._qd_needs_member_check
         assert cached_infer_dataclass_schema(state, "state") is schema
 
-        member_type = schema.__dataclass_fields__["value"].type
-        entry = SchemaNeedingMemberChecks(state, schema, (("value", False),), (member_type,))
-        assert not entry.member_guards
 
 
 @pytest.mark.parametrize("backend", ["numpy", "torch"])

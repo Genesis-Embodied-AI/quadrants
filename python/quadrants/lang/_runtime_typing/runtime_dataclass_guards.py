@@ -1,23 +1,11 @@
 """Validate mutable descendants before reusing a frozen dataclass's inferred schema."""
 
-import sys
-from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
-import numpy as np
-
-from quadrants._tensor_wrapper import Tensor
-from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.types import DeferredMemberType
-from quadrants.lang.any_array import AnyArray
-from quadrants.lang.buffer_view import BufferView
-from quadrants.lang.field import Field
-from quadrants.lang.matrix import Matrix
-from quadrants.lang.struct import Struct
 
 if TYPE_CHECKING:
-    from typing import _SpecialForm
-
     from quadrants.lang._runtime_typing.types import (
         DataclassInstance,
         InferredMemberType,
@@ -32,36 +20,12 @@ class SchemaNeedingMemberChecks:
 
     def __init__(
         self,
-        dataclass_instance: "DataclassInstance",
         schema: "type[RuntimeDataclassSchema]",
-        field_names_and_final: Sequence[tuple[str, bool]],
-        member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
+        member_guards: "list[tuple[str, InferredMemberType | DeferredMemberType]]",
     ) -> None:
-        """Record guards for members whose runtime representation can change inside a frozen dataclass."""
+        """Store the member checks selected during runtime type inference."""
         self.schema = schema
-        self.member_guards = []
-        torch = sys.modules.get("torch")
-        for (name, is_final), member_type in zip(field_names_and_final, member_types):
-            if is_final:
-                # Final values are still validated by specialization and launch handling; their declared type is fixed.
-                continue
-            if isinstance(member_type, DeferredMemberType):
-                continue
-            child = getattr(dataclass_instance, name)
-            if isinstance(child, Tensor):
-                continue
-            if hasattr(member_type, "_qd_underlying_dataclass"):
-                if not cast("type[RuntimeDataclassSchema]", member_type)._qd_needs_member_check:
-                    continue
-            elif child is None or isinstance(
-                child, (bool, int, float, np.generic, np.ndarray, Ndarray, AnyArray, BufferView, Field, Matrix)
-            ):
-                continue
-            if isinstance(child, Struct) and getattr(child, "_qd_struct_type", None) is not None:
-                continue
-            if torch is not None and isinstance(child, torch.Tensor):
-                continue
-            self.member_guards.append((name, member_type))
+        self.member_guards = member_guards
 
     def do_member_check(
         self,

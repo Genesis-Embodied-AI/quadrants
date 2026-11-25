@@ -253,11 +253,16 @@ def _infer_dataclass_runtime_member_types(
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None,
     final_value_key_by_value_id: FinalValueKeyCache | None,
-) -> "tuple[list[InferredMemberType | DeferredMemberType | _SpecialForm], bool, bool]":
-    """Read members and infer their types, returning (member_types, needs_member_check, has_deferred_error).
+) -> tuple[
+    "list[InferredMemberType | DeferredMemberType | _SpecialForm]",
+    bool,
+    bool,
+    list[tuple[str, InferredMemberType | DeferredMemberType]],
+]:
+    """Read members and infer their types, returning (member_types, needs_member_check, has_deferred_error, member_guards).
 
     needs_member_check means inferred types may need checking before reuse. has_deferred_error marks errors raised only
-    if a member is used during compilation.
+    if a member is used during compilation. member_guards records names and inferred types needing checks.
     """
     dataclass_type = type(dataclass_instance)
     frozen = is_frozen_dataclass(dataclass_type)
@@ -267,6 +272,7 @@ def _infer_dataclass_runtime_member_types(
     needs_member_check = not frozen
     member_types: list[InferredMemberType | DeferredMemberType | _SpecialForm] = []
     has_deferred_error = False
+    member_guards: list[tuple[str, InferredMemberType | DeferredMemberType]] = []
     for name, is_final in field_names_and_final:
         member = getattr(dataclass_instance, name)
         if is_final:
@@ -282,12 +288,14 @@ def _infer_dataclass_runtime_member_types(
                 member, f"{path}.{name}", ancestor_ids, member_non_frozen_ancestor_path, final_value_key_by_value_id
             )
             needs_member_check |= _needs_member_check
+            if _needs_member_check:
+                member_guards.append((name, member_type))
         if isinstance(member_type, DeferredMemberType):
             has_deferred_error = True
         elif is_runtime_dataclass_schema(member_type):
             has_deferred_error |= member_type._qd_has_deferred_errors
         member_types.append(member_type)
-    return member_types, needs_member_check, has_deferred_error
+    return member_types, needs_member_check, has_deferred_error, member_guards
 
 
 def _create_dataclass_field(
@@ -311,8 +319,7 @@ def _store_schema_in_instance_cache(
     compiler_settings_and_ancestor_path: InferenceContextKey,
     schema: type[RuntimeDataclassSchema],
     needs_member_check: bool,
-    field_names_and_final: tuple[tuple[str, bool], ...],
-    member_types: "list[InferredMemberType | DeferredMemberType | _SpecialForm]",
+    member_guards: list[tuple[str, InferredMemberType | DeferredMemberType]],
 ) -> None:
     """Cache a schema or its member-check wrapper when the instance supports weak references."""
     if schema_by_compiler_settings_and_ancestor_path is None:
@@ -329,7 +336,7 @@ def _store_schema_in_instance_cache(
     schema_by_compiler_settings_and_ancestor_path[compiler_settings_and_ancestor_path] = (
         schema
         if not needs_member_check
-        else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
+        else SchemaNeedingMemberChecks(schema, member_guards)
     )
 
 
@@ -374,7 +381,7 @@ def cached_infer_dataclass_schema(
         return cached_schema_entry.schema
 
     field_names_and_final, has_final_fields = _cached_get_field_names_and_finality(dataclass_type)
-    member_types, needs_member_check, has_deferred_error = _infer_dataclass_runtime_member_types(
+    member_types, needs_member_check, has_deferred_error, member_guards = _infer_dataclass_runtime_member_types(
         dataclass_instance,
         field_names_and_final,
         path,
@@ -406,8 +413,7 @@ def cached_infer_dataclass_schema(
             compiler_settings_and_ancestor_path,
             schema,
             needs_member_check,
-            field_names_and_final,
-            member_types,
+            member_guards,
         )
     return schema
 
