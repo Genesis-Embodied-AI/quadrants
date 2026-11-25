@@ -374,7 +374,7 @@ class Matrix(QuadrantsOperations):
             indices = [indices]
         assert len(indices) in [1, 2]
         assert len(indices) == self.ndim, f"Expected {self.ndim} indices, got {len(indices)}"
-        components = self.accessors if self.is_host_access else self.entries
+        components = self._members
         if self.ndim == 1:
             return components[indices[0]]
 
