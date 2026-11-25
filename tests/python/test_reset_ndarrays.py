@@ -95,7 +95,7 @@ def test_ndarray_reset() -> None:
 
 @test_utils.test(arch=qd.cpu)
 def test_reset_releases_template_arguments() -> None:
-    """Release arguments retained by specialization signatures and reuse the kernel after reinitialization."""
+    """Check that reset releases cached template arguments and the kernel works after reinitialization."""
 
     class Data:
         def __init__(self, value: int) -> None:
