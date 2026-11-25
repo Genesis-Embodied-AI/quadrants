@@ -743,6 +743,8 @@ class ScalarField(Field):
 
 class SNodeHostAccessor:
     def __init__(self, snode):
+        # Quantized storage has no equivalent NumPy dtype; retain value-based conversion for it.
+        self.numpy_dtype = None if _qd_core.is_quant(snode.data_type()) else to_numpy_type(snode.data_type())
         if _qd_core.is_real(snode.data_type()):
             write_func = snode.write_float
             read_func = snode.read_float

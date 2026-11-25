@@ -1413,3 +1413,30 @@ def test_matrix_loop_unique():
 
     for u in range(10):
         assert F_x[u][1] == 1.0
+
+
+@pytest.mark.parametrize("backend", ["field", "ndarray"])
+@test_utils.test(arch=qd.cpu, require=qd.extension.data64)
+def test_host_matrix_to_numpy_preserves_dtype(backend):
+    """Field and ndarray elements retain their dtype when their values change."""
+    for matrix_type, dimensions in ((qd.Vector, (2,)), (qd.Matrix, (2, 2))):
+        for dtype, numpy_dtype in ((qd.i32, np.int32), (qd.f32, np.float32), (qd.u64, np.uint64)):
+            backing = getattr(matrix_type, backend)(*dimensions, dtype=dtype, shape=1)
+            backing.from_numpy(np.ones((1, *dimensions), dtype=numpy_dtype))
+            element = backing[0]
+            assert element.to_numpy().dtype == numpy_dtype
+            updated = np.full((1, *dimensions), 2**63 + 1 if dtype == qd.u64 else 3, dtype=numpy_dtype)
+            backing.from_numpy(updated)
+            result = element.to_numpy()
+            assert result.dtype == numpy_dtype
+            np.testing.assert_array_equal(result, updated[0])
+
+
+@test_utils.test(arch=qd.cpu)
+def test_host_matrix_to_numpy_promotes_mixed_component_types():
+    """Mixed component dtypes determine promotion independently of current values."""
+    field = qd.Vector.field(2, dtype=[qd.i16, qd.f32], shape=1)
+    field[0] = [1, 2]
+    result = field[0].to_numpy()
+    assert result.dtype == np.result_type(np.int16, np.float32)
+    np.testing.assert_array_equal(result, [1, 2])

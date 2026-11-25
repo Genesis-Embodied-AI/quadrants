@@ -725,7 +725,14 @@ class Matrix(QuadrantsOperations):
             array([[0], [1], [2], [3]])
         """
         if self.is_host_access:
-            return np.array(self.to_list())
+            entries = [entry for row in self.entries for entry in row] if self.ndim == 2 else self.entries
+            numpy_dtypes = [
+                entry.accessor.numpy_dtype if isinstance(entry, SNodeHostAccess) else to_numpy_type(entry.ndarr.dtype)
+                for entry in entries
+            ]
+            # Mixed-type fields use NumPy promotion; quantized fields retain value-based conversion.
+            dtype = None if None in numpy_dtypes else np.result_type(*numpy_dtypes)
+            return np.array(self.to_list(), dtype=dtype)
         return self.entries
 
     @quadrants_scope
