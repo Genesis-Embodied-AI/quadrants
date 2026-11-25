@@ -302,6 +302,35 @@ def _create_dataclass_field(
     return field
 
 
+def _store_schema_in_instance_cache(
+    dataclass_instance: DataclassInstance,
+    schema_by_compiler_settings_and_ancestor_path: dict[
+        InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks
+    ] | None,
+    compiler_settings_and_ancestor_path: InferenceContextKey,
+    schema: type[RuntimeDataclassSchema],
+    needs_member_check: bool,
+    field_names_and_final: tuple[tuple[str, bool], ...],
+    member_types: "list[InferredMemberType | DeferredMemberType | _SpecialForm]",
+) -> None:
+    """Cache a schema or its member-check wrapper when the instance supports weak references."""
+    if schema_by_compiler_settings_and_ancestor_path is None:
+        schema_by_compiler_settings_and_ancestor_path = {}
+        try:
+            _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path[dataclass_instance] = (
+                schema_by_compiler_settings_and_ancestor_path
+            )
+        except TypeError:
+            # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
+            return
+
+    schema_by_compiler_settings_and_ancestor_path[compiler_settings_and_ancestor_path] = (
+        schema
+        if not needs_member_check
+        else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
+    )
+
+
 def cached_infer_dataclass_schema(
     dataclass_instance: DataclassInstance,
     path: str,
@@ -366,24 +395,17 @@ def cached_infer_dataclass_schema(
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Deferred descriptions are reusable because debug is part of the instance-cache key.
     # Final-bearing paths still require validation.
-    store_to_instance_cache = not needs_member_check or (
+    if not needs_member_check or (
         is_frozen_dataclass(dataclass_type) and not has_final_fields and non_frozen_ancestor_path is None
-    )
-    if store_to_instance_cache:
-        if schema_by_compiler_settings_and_ancestor_path is None:
-            schema_by_compiler_settings_and_ancestor_path = {}
-            try:
-                _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path[dataclass_instance] = (
-                    schema_by_compiler_settings_and_ancestor_path
-                )
-            except TypeError:
-                # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
-                return schema
-
-        schema_by_compiler_settings_and_ancestor_path[compiler_settings_and_ancestor_path] = (
-            schema
-            if not needs_member_check
-            else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
+    ):
+        _store_schema_in_instance_cache(
+            dataclass_instance,
+            schema_by_compiler_settings_and_ancestor_path,
+            compiler_settings_and_ancestor_path,
+            schema,
+            needs_member_check,
+            field_names_and_final,
+            member_types,
         )
     return schema
 
