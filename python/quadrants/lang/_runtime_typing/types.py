@@ -82,7 +82,7 @@ def create_dataclass_schema(
                 "_qd_underlying_dataclass": dataclass_type,
                 "_qd_needs_member_check": needs_member_check,
                 "_qd_has_deferred_errors": has_deferred_error,
-                # Kernel selection compares this signature to reuse compiled code for matching dataclass member types.
+                # Kernel selection compares _qd_type_signature to reuse compiled code for matching dataclass member types.
                 "_qd_type_signature": (
                     id(dataclass_type),
                     tuple(
