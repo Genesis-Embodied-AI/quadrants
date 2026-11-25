@@ -293,14 +293,13 @@ def _infer_dataclass_runtime_member_types(
 
 
 def _create_dataclass_fields_with_inferred_types(
-    dataclass_type: type[DataclassInstance],
     field_names_and_final: tuple[tuple[str, bool], ...],
     member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
 ) -> dict[str, dataclasses.Field[Any]]:
-    """Create schema fields with inferred types, preserving the original fields' names and metadata."""
+    """Create schema fields from field names and inferred member types."""
     fields: dict[str, dataclasses.Field[Any]] = {}
     for (name, _), member_type in zip(field_names_and_final, member_types):
-        resolved = dataclasses.field(metadata=dataclass_type.__dataclass_fields__[name].metadata)
+        resolved = dataclasses.field()
         resolved.name = name
         resolved.type = member_type
         # dataclasses.fields() includes only entries marked as normal fields.
@@ -367,7 +366,7 @@ def cached_infer_dataclass_schema(
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
         # The field cache retains the dataclass type and field order; member types and stability come from inference.
-        fields = _create_dataclass_fields_with_inferred_types(dataclass_type, field_names_and_final, member_types)
+        fields = _create_dataclass_fields_with_inferred_types(field_names_and_final, member_types)
         schema = create_dataclass_schema(dataclass_type, fields, needs_member_check, has_deferred_error)
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
