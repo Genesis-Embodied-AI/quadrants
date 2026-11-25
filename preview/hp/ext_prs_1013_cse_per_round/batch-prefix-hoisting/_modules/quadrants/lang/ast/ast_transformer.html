@@ -590,7 +590,7 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">Matrix</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Matrices with more than one columns cannot be unpacked"</span><span class="p">)</span>
-            <span class="n">values</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">entries</span>
+            <span class="n">values</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">_members</span>
 
         <span class="c1"># Unpack: a, b, c = qd.Vector([1., 2., 3.])</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">values</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -1244,15 +1244,15 @@
                     <span class="s2">"A class cannot be both a Python dataclass and data-oriented."</span>
                 <span class="p">)</span>
             <span class="n">lifted</span> <span class="o">=</span> <span class="n">resolve_bound_member</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">lifted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">lifted</span>
-                <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span>
-            <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">):</span>
+            <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">lifted</span> <span class="k">if</span> <span class="n">lifted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
                     <span class="s2">"Data-oriented objects inside Python dataclass fields are unsupported. "</span>
                     <span class="s2">"Store the dataclass on the data-oriented object instead."</span>
                 <span class="p">)</span>
+            <span class="k">if</span> <span class="n">lifted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span>
+
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
                 <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span><span class="p">,</span>
             <span class="p">)</span>
