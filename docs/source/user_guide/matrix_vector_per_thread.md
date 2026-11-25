@@ -99,4 +99,4 @@ def mat_vec() -> None:
 
 ## Converting a field or ndarray element to NumPy
 
-Calling `to_numpy()` on a matrix or vector read from a field or ndarray preserves its backing dtype. For example, `qd.Vector.field(2, dtype=qd.f32, shape=1)[0].to_numpy()` returns a `float32` array. Fields with mixed component dtypes use NumPy's dtype promotion rules. Quantized fields continue to infer the NumPy dtype from their values.
+Calling `to_numpy()` on a matrix or vector read from a field or ndarray preserves its backing dtype. For example, `qd.Vector.field(2, dtype=qd.f32, shape=1)[0].to_numpy()` returns a `float32` array. Quantized fields continue to infer the NumPy dtype from their values.

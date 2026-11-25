@@ -1430,13 +1430,3 @@ def test_host_matrix_to_numpy_preserves_dtype(backend):
             result = element.to_numpy()
             assert result.dtype == numpy_dtype
             np.testing.assert_array_equal(result, updated[0])
-
-
-@test_utils.test(arch=qd.cpu)
-def test_host_matrix_to_numpy_promotes_mixed_component_types():
-    """Mixed component dtypes determine promotion independently of current values."""
-    field = qd.Vector.field(2, dtype=[qd.i16, qd.f32], shape=1)
-    field[0] = [1, 2]
-    result = field[0].to_numpy()
-    assert result.dtype == np.result_type(np.int16, np.float32)
-    np.testing.assert_array_equal(result, [1, 2])
