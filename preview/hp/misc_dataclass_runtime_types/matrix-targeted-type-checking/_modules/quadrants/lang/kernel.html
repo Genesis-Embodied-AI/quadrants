@@ -974,9 +974,10 @@
         <span class="c1"># parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker</span>
         <span class="c1"># happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is</span>
         <span class="c1"># the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``</span>
-        <span class="c1"># cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the</span>
-        <span class="c1"># steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)</span>
-        <span class="c1"># are excluded because that combination is a legitimate pattern routed through the data-oriented path.</span>
+        <span class="c1"># cache-hit early return above, so it only runs on the first compile for each unique specialization signature -</span>
+        <span class="c1"># zero cost on the steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over</span>
+        <span class="c1"># ``@dataclasses.dataclass``) are excluded because that combination is a legitimate pattern routed through the</span>
+        <span class="c1"># data-oriented path.</span>
         <span class="k">for</span> <span class="n">arg_meta</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="n">py_args</span><span class="p">):</span>
             <span class="n">ann</span> <span class="o">=</span> <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span>
             <span class="k">if</span> <span class="n">ann</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">template</span> <span class="ow">and</span> <span class="nb">type</span><span class="p">(</span><span class="n">ann</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">template</span><span class="p">:</span>
