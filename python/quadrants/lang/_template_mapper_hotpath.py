@@ -171,7 +171,7 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     paths = []
     _build_struct_nd_paths(arg, (), paths)
     try:
-        # FIXME: Do not modify the passed-in argument. Do not use setattr.
+        # FIXME: Do not modify the arg. Do not use setattr.
         object.__setattr__(arg, "_qd_nd_paths", paths)
     except AttributeError:
         # No ``__dict__`` to stash in - degrade to per-class caching.
@@ -494,7 +494,7 @@ def _extract_arg(
                 _key_map = None
             if _key_map is None:
                 try:
-                    # FIXME: Avoid setattr and store this cache without modifying passed-in objects.
+                    # FIXME: Do not modify the arg. Do not use setattr.
                     object.__setattr__(arg, "_qd_specialization_signature", {id(annotation): (annotation, key)})
                 except AttributeError:
                     # Impossible to store _qd_specialization_signature at instance-level if 'slots=True'. It is
