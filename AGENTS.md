@@ -38,3 +38,9 @@ Code should be written in the highest-level language possible that will give sim
 Only drop down to a lower-level language when there is a concrete performance (or other technical) reason that the higher-level option cannot meet.
 
 Code-review agents: flag PRs that use a lower-level language than necessary when a higher-level option would give similar performance.
+
+## Use explicit, imperative method names
+
+Method names must start with a verb in the imperative, such as `get`, `create`, `validate`, or `update`. Name the action the method performs, including validation when that is part of its purpose.
+
+Prefer explicit names over short names or abbreviations. For example, use `validate_and_get_final_field_names` rather than `final_field_names` when the method both validates fields and returns their names.
