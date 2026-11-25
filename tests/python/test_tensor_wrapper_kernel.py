@@ -4,7 +4,7 @@ Pins two contracts:
 
 1. **Cache stability under wrapping.** Calling the same kernel with a ``Tensor(impl)`` wrapper and with the bare
    ``impl`` must produce exactly *one* compiled-kernel cache entry, not two. This is gotcha A from the design doc
-   (§8.11): the unwrap hook must run *before* ``KernelSpecializationMapper.lookup`` computes ``id``-based hashes.
+   (Section 8.11): the unwrap hook must run *before* ``KernelSpecializationMapper.lookup`` computes ``id``-based hashes.
 
 2. **Functional equivalence.** A kernel called with a wrapper must read and write the same memory as the same kernel
    called with the bare impl, on both backends. No data corruption, no shape confusion.
