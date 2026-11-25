@@ -31,6 +31,9 @@ Module Contents
 
    Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
 
+   Overrides of ``to_numpy()`` MUST preserve the element dtype (the compute dtype for quantized fields).
+   The returned dtype must not change when element values change; runtime type inference relies on this invariant.
+
    :param arr: the initial values of a matrix.
    :type arr: Union[list, tuple, np.ndarray]
    :param dt: the element data type.
@@ -621,45 +624,10 @@ Module Contents
    Bases: :py:obj:`Matrix`
 
 
-   The matrix class.
+   A vector of scalar elements.
 
-   A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is aligned continuously. We
-   recommend only use matrix with no more than 32 elements for efficiency considerations.
-
-   Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
-
-   :param arr: the initial values of a matrix.
-   :type arr: Union[list, tuple, np.ndarray]
-   :param dt: the element data type.
-   :type dt: :mod:`~quadrants.types.primitive_types`
-   :param ndim: the number of dimensions of the matrix; forced reshape if given.
-   :type ndim: int optional
-
-   Example::
-
-       use a 2d list to initialize a matrix
-
-       >>> @qd.kernel
-       >>> def test():
-       >>>     n = 5
-       >>>     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
-       >>>     print(M)  # a 5x5 matrix with integer elements
-
-       get the number of rows and columns via the `n`, `m` property:
-
-       >>> M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
-       >>> M.n  # number of rows
-       3
-       >>> M.m  # number of cols
-       >>> 2
-
-       you can even initialize a matrix with an empty list:
-
-       >>> M = qd.Matrix([[], []], qd.i32)
-       >>> M.n
-       2
-       >>> M.m
-       0
+   Overrides of ``to_numpy()`` MUST preserve the element dtype (the compute dtype for quantized fields).
+   The returned dtype must not change when element values change; runtime type inference relies on this invariant.
 
 
    .. py:method:: get_shape()

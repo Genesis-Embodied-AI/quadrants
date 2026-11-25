@@ -558,6 +558,9 @@
 
 <span class="sd">    Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.</span>
 
+<span class="sd">    Overrides of ``to_numpy()`` MUST preserve the element dtype (the compute dtype for quantized fields).</span>
+<span class="sd">    The returned dtype must not change when element values change; runtime type inference relies on this invariant.</span>
+
 <span class="sd">    Args:</span>
 <span class="sd">        arr (Union[list, tuple, np.ndarray]): the initial values of a matrix.</span>
 <span class="sd">        dt (:mod:`~quadrants.types.primitive_types`): the element data type.</span>
@@ -1626,6 +1629,12 @@
 <div class="viewcode-block" id="Vector">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Vector</span><span class="p">(</span><span class="n">Matrix</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""A vector of scalar elements.</span>
+
+<span class="sd">    Overrides of ``to_numpy()`` MUST preserve the element dtype (the compute dtype for quantized fields).</span>
+<span class="sd">    The returned dtype must not change when element values change; runtime type inference relies on this invariant.</span>
+<span class="sd">    """</span>
+
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Constructs a vector from given array.</span>
 

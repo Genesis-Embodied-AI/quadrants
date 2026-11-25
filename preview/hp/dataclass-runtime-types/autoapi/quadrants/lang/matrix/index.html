@@ -372,7 +372,7 @@
 <td><p>The matrix class.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.matrix.Vector" title="quadrants.lang.matrix.Vector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Vector</span></code></a></p></td>
-<td><p>The matrix class.</p></td>
+<td><p>A vector of scalar elements.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.matrix.MatrixField" title="quadrants.lang.matrix.MatrixField"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MatrixField</span></code></a></p></td>
 <td><p>Quadrants matrix field with SNode implementation.</p></td>
@@ -397,6 +397,8 @@
 <p>A matrix is a 2-D rectangular array with scalar entries, it’s row-majored, and is aligned continuously. We
 recommend only use matrix with no more than 32 elements for efficiency considerations.</p>
 <p>Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.</p>
+<p>Overrides of <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> MUST preserve the element dtype (the compute dtype for quantized fields).
+The returned dtype must not change when element values change; runtime type inference relies on this invariant.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1070,45 +1072,9 @@ entry is equal to <cite>xi*yj</cite>.</p>
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Vector">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">quadrants.lang.matrix.</span></span><span class="sig-name descname"><span class="pre">Vector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#quadrants.lang.matrix.Matrix" title="quadrants.lang.matrix.Matrix"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Matrix</span></code></a></p>
-<p>The matrix class.</p>
-<p>A matrix is a 2-D rectangular array with scalar entries, it’s row-majored, and is aligned continuously. We
-recommend only use matrix with no more than 32 elements for efficiency considerations.</p>
-<p>Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>arr</strong> (<em>Union</em><em>[</em><em>list</em><em>, </em><em>tuple</em><em>, </em><em>np.ndarray</em><em>]</em>) – the initial values of a matrix.</p></li>
-<li><p><strong>dt</strong> (<a class="reference internal" href="../../types/primitive_types/index.html#module-quadrants.types.primitive_types" title="quadrants.types.primitive_types"><code class="xref py py-mod docutils literal notranslate"><span class="pre">primitive_types</span></code></a>) – the element data type.</p></li>
-<li><p><strong>ndim</strong> (<em>int optional</em>) – the number of dimensions of the matrix; forced reshape if given.</p></li>
-</ul>
-</dd>
-</dl>
-<p>Example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>use a 2d list to initialize a matrix
-
-&gt;&gt;&gt; @qd.kernel
-&gt;&gt;&gt; def test():
-&gt;&gt;&gt;     n = 5
-&gt;&gt;&gt;     M = qd.Matrix([[0] * n for _ in range(n)], qd.i32)
-&gt;&gt;&gt;     print(M)  # a 5x5 matrix with integer elements
-
-get the number of rows and columns via the `n`, `m` property:
-
-&gt;&gt;&gt; M = qd.Matrix([[0, 1], [2, 3], [4, 5]], qd.i32)
-&gt;&gt;&gt; M.n  # number of rows
-3
-&gt;&gt;&gt; M.m  # number of cols
-&gt;&gt;&gt; 2
-
-you can even initialize a matrix with an empty list:
-
-&gt;&gt;&gt; M = qd.Matrix([[], []], qd.i32)
-&gt;&gt;&gt; M.n
-2
-&gt;&gt;&gt; M.m
-0
-</pre></div>
-</div>
+<p>A vector of scalar elements.</p>
+<p>Overrides of <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> MUST preserve the element dtype (the compute dtype for quantized fields).
+The returned dtype must not change when element values change; runtime type inference relies on this invariant.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Vector.get_shape">
 <span class="sig-name descname"><span class="pre">get_shape</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Vector.get_shape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Vector.get_shape" title="Link to this definition">#</a></dt>
