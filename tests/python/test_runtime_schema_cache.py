@@ -83,7 +83,11 @@ def test_inferred_member_check_requirements() -> None:
     class UnsafeHash:
         value: object
 
+    class CustomTensor(qd.Tensor):
+        pass
+
     tensor = qd.tensor(qd.f32, shape=2, backend=qd.Backend.NDARRAY)
+    custom_tensor = CustomTensor(tensor._unwrap())
     for py_obj, expected in (
         (None, False),
         (1, False),
@@ -91,6 +95,7 @@ def test_inferred_member_check_requirements() -> None:
         (np.int32(1), False),
         (np.zeros(2), False),
         (tensor, False),
+        (custom_tensor, False),
         (tensor._unwrap(), False),
         (qd.Vector([1, 2]), False),
         (qd.Struct(value=1), True),
@@ -103,6 +108,14 @@ def test_inferred_member_check_requirements() -> None:
     ):
         _, needs_member_check = infer_member_type(py_obj, "state.value", frozenset())
         assert needs_member_check is expected, type(py_obj)
+
+    state = Frozen(custom_tensor)
+    schema = cached_infer_dataclass_schema(state, "state")
+    assert not schema._qd_needs_member_check
+    assert cached_infer_dataclass_schema(state, "state") is schema
+
+    entry = SchemaNeedingMemberChecks(state, schema, (("value", False),), (qd.Tensor,))
+    assert not entry.member_guards
 
 
 @pytest.mark.parametrize("backend", ["numpy", "torch"])

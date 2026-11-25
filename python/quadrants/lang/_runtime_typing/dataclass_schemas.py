@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 
 from quadrants._lib.core.quadrants_python import DataTypeCxx
-from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES, Tensor
+from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
 from quadrants.lang._final.final_annotation import dataclass_field_is_final
 from quadrants.lang._final.final_dataclass_fields import (
@@ -169,7 +169,8 @@ def infer_member_type(
         if is_runtime_dataclass_schema(member_type):
             return member_type, member_type._qd_needs_member_check
 
-        return member_type, type(py_obj) not in _TENSOR_WRAPPER_TYPES
+        # Tensor subclasses must also keep their backing type invariant.
+        return member_type, False
 
     if hasattr(type(py_obj), "__dataclass_fields__"):
         schema = cached_infer_dataclass_schema(

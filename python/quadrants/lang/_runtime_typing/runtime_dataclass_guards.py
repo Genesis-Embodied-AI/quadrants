@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
-from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix
@@ -43,7 +43,7 @@ class SchemaNeedingMemberChecks:
                 # Final values are still validated by specialization and launch handling; their declared type is fixed.
                 continue
             child = getattr(value, name)
-            if type(child) in _TENSOR_WRAPPER_TYPES:
+            if isinstance(child, Tensor):
                 continue
             if hasattr(member_type, "_qd_underlying_dataclass"):
                 if not cast("type[RuntimeDataclassSchema]", member_type)._qd_needs_member_check:
