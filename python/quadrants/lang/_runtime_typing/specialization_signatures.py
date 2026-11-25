@@ -73,11 +73,8 @@ def build_nested_dataclass_specialization_signatures(
     template_slot_locations: list[int],
     runtime_kernel: "Kernel | None",
     final_value_key_by_value_id: FinalValueKeyCache | None,
-) -> tuple[tuple[Any, ...], bool]:
-    """Prepare nested dataclass schemas and return (signatures, disable_identity_cache).
-
-    Call after the identity-cache lookup so eligible cache hits skip schema collection.
-    """
+) -> tuple[tuple[int, tuple[str, ...], Any], ...]:
+    """Collect nested dataclass schemas, update kernel metadata, and return their specialization signatures."""
     launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(py_args, arg_metas, template_slot_locations)
     if runtime_kernel is not None:
         runtime_kernel._launch_arg_schemas = launch_arg_schemas
@@ -85,13 +82,7 @@ def build_nested_dataclass_specialization_signatures(
             schema._qd_has_deferred_errors for _, _, schema in launch_arg_schemas
         )
 
-    if not launch_arg_schemas:
-        return (), False
-
-    # Exclude dataclasses beneath data-oriented arguments from the identity cache.
-    # A nested dataclass member can change type while the containing argument keeps the same identity.
-    # A cache hit would then skip schema inference and could select the wrong compiled kernel.
-    signature = tuple(
+    return tuple(
         (
             index,
             path,
@@ -105,4 +96,3 @@ def build_nested_dataclass_specialization_signatures(
         )
         for index, path, schema in launch_arg_schemas
     )
-    return signature, True

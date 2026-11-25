@@ -166,7 +166,7 @@ class KernelSpecializationMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        nested_signatures, disable_identity_cache = build_nested_dataclass_specialization_signatures(
+        nested_signatures = build_nested_dataclass_specialization_signatures(
             raise_on_templated_floats,
             args,
             self.arguments,
@@ -174,7 +174,10 @@ class KernelSpecializationMapper:
             runtime_kernel,
             final_value_key_by_value_id,
         )
-        cache_disabled |= disable_identity_cache
+        # This cache uses argument identities. A nested dataclass member can change type while the containing
+        # data-oriented argument keeps the same identity. Caching calls with nested signatures would let a cache hit
+        # skip schema inference and could select the wrong compiled kernel.
+        cache_disabled |= bool(nested_signatures)
         key = (
             self.build_argument_specialization_signature(raise_on_templated_floats, args, final_value_key_by_value_id)
             + (cached_get_container_alias_key(args),)
