@@ -92,7 +92,7 @@ def test_inferred_member_check_requirements() -> None:
         (np.zeros(2), False),
         (tensor, False),
         (tensor._unwrap(), False),
-        (qd.Vector([1, 2]), True),
+        (qd.Vector([1, 2]), False),
         (qd.Struct(value=1), True),
         (Frozen(1), False),
         (UnsafeHash(1), False),
@@ -143,3 +143,37 @@ def test_array_members_do_not_need_schema_checks(backend: str) -> None:
     entry = next(iter(entries.values()))
     assert isinstance(entry, SchemaNeedingMemberChecks)
     assert [name for name, _ in entry.member_guards] == ["other"]
+
+
+@test_utils.test(arch=qd.cpu)
+def test_matrix_schema_uses_recorded_dtype(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Matrix inference avoids value reads, and schema reuse checks only mutable dataclass children."""
+
+    @dataclass
+    class Mutable:
+        value: object
+
+    @dataclass(frozen=True)
+    class State:
+        matrix: object
+        other: object
+
+    def reject_numpy_conversion(self: qd.Matrix) -> None:
+        raise AssertionError("Schema inference must not read matrix values")
+
+    monkeypatch.setattr(qd.Matrix, "to_numpy", reject_numpy_conversion)
+    for matrix in (qd.Matrix([[1, 2]], dt=qd.i32), qd.Vector([1, 2], dt=qd.i32)):
+        state = State(matrix, None)
+        schema = cached_infer_dataclass_schema(state, "state")
+        assert schema.__dataclass_fields__["matrix"].type.dtype == qd.i32
+        assert not schema._qd_needs_member_check
+        matrix.fill(3)
+        assert cached_infer_dataclass_schema(state, "state") is schema
+
+        guarded = State(matrix, Mutable(1))
+        cached_infer_dataclass_schema(guarded, "state")
+        entries = _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(guarded)
+        assert entries is not None
+        entry = next(iter(entries.values()))
+        assert isinstance(entry, SchemaNeedingMemberChecks)
+        assert [name for name, _ in entry.member_guards] == ["other"]

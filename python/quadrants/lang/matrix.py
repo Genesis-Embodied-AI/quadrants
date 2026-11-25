@@ -223,8 +223,7 @@ class Matrix(QuadrantsOperations):
 
     Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
 
-    Overrides of ``to_numpy()`` MUST preserve the element dtype (the compute dtype for quantized fields).
-    The returned dtype must not change when element values change; runtime type inference relies on this invariant.
+    Runtime type inference assumes the shape and recorded ``dtype`` remain fixed when element values change.
 
     Args:
         arr (Union[list, tuple, np.ndarray]): the initial values of a matrix.
@@ -1214,8 +1213,7 @@ class Matrix(QuadrantsOperations):
 class Vector(Matrix):
     """A vector of scalar elements.
 
-    Overrides of ``to_numpy()`` MUST preserve the element dtype (the compute dtype for quantized fields).
-    The returned dtype must not change when element values change; runtime type inference relies on this invariant.
+    Runtime type inference assumes the shape and recorded ``dtype`` remain fixed when element values change.
     """
 
     def __init__(self, arr, dt=None, **kwargs):

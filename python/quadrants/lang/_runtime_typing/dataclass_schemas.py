@@ -223,13 +223,13 @@ def infer_member_type(
         return impl.get_runtime().default_fp, False
 
     if isinstance(py_obj, Matrix):
-        dtype = to_quadrants_type(np.asarray(py_obj.to_numpy()).dtype)
+        dtype = py_obj.dtype
         key = (py_obj.n, py_obj.m, py_obj.ndim, dtype)
         if key not in _matrix_types:
             _matrix_types[key] = (
                 VectorType(py_obj.n, dtype) if py_obj.ndim == 1 else MatrixType(py_obj.n, py_obj.m, py_obj.ndim, dtype)
             )
-        return _matrix_types[key], True
+        return _matrix_types[key], False
 
     if isinstance(py_obj, Struct):
         declared = getattr(py_obj, "_qd_struct_type", None)
