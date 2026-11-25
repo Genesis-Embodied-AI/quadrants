@@ -19,7 +19,8 @@ from ._template_mapper_hotpath import (
     annotation_has_final_subtree,
 )
 
-# Whether an arg of this class contributes to the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Only the
+# Whether an arg of this class contributes to the args_hash ndarray-id walk in ``KernelSpecializationMapper.lookup``.
+# Only the
 # decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
 # different attribute structure per instance (Genesis ``DataManager``).
 # Weak keys avoid retaining user classes and their kernels, which can keep the runtime alive during shutdown.
@@ -43,25 +44,16 @@ def _classify_disposition(arg: Any) -> object:
 Key: TypeAlias = tuple[Any, ...]
 
 
-def _destroy_callback(template_mapper_ref: ReferenceType["TemplateMapper"], ref: ReferenceType):
-    maybe_template_mapper = template_mapper_ref()
-    if maybe_template_mapper is not None:
-        maybe_template_mapper._mapping_cache.clear()
-        maybe_template_mapper._mapping_cache_tracker.clear()
-        maybe_template_mapper._prog_weakref = None
+def _destroy_callback(specialization_mapper_ref: ReferenceType["KernelSpecializationMapper"], ref: ReferenceType):
+    maybe_kernel_specialization_mapper = specialization_mapper_ref()
+    if maybe_kernel_specialization_mapper is not None:
+        maybe_kernel_specialization_mapper._mapping_cache.clear()
+        maybe_kernel_specialization_mapper._mapping_cache_tracker.clear()
+        maybe_kernel_specialization_mapper._prog_weakref = None
 
 
-class TemplateMapper:
-    """
-    This should probably be renamed to sometihng like FeatureMapper, or
-    FeatureExtractor, since:
-    - it's not specific to templates
-    - it extracts what are later called 'features', for example for ndarray this includes:
-        - element type
-        - number dimensions
-        - needs grad (or not)
-    - these are returned as a heterogeneous tuple, whose contents depends on the type
-    """
+class KernelSpecializationMapper:
+    """Map argument specialization signatures to kernel-specialization identifiers."""
 
     def __init__(self, arguments: list[ArgMetadata], template_slot_locations: list[int]) -> None:
         self.arguments: list[ArgMetadata] = arguments

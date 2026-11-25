@@ -658,7 +658,8 @@ class Kernel(FuncBase):
 
         callbacks: list[Callable[[], None]] = []
         launch_ctx = t_kernel.make_launch_context()
-        # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
+        # Special treatment for primitive types is unecessary and detrimental. See 'KernelSpecializationMapper.lookup'
+        # for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
         # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between

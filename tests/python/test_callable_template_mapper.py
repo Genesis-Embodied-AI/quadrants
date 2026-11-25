@@ -1,18 +1,18 @@
 import quadrants as qd
-from quadrants.lang._template_mapper import TemplateMapper
+from quadrants.lang._kernel_specialization_mapper import KernelSpecializationMapper
 from quadrants.lang.kernel_arguments import ArgMetadata
 
 from tests.helpers import test_utils
 
 
 @test_utils.test()
-def test_callable_template_mapper():
+def test_callable_kernel_specialization_mapper():
     x = qd.field(qd.i32)
     y = qd.field(qd.f32)
 
     qd.root.place(x, y)
 
-    mapper = TemplateMapper(
+    mapper = KernelSpecializationMapper(
         (
             ArgMetadata(qd.Template, qd.Template),
             ArgMetadata(qd.Template, qd.Template),
@@ -26,7 +26,7 @@ def test_callable_template_mapper():
     assert mapper.lookup(False, (0, 0, 1))[0] == 2
     assert mapper.lookup(False, (0, 1, 0))[0] == 1
 
-    mapper = TemplateMapper(
+    mapper = KernelSpecializationMapper(
         (
             ArgMetadata(qd.i32, qd.i32),
             ArgMetadata(qd.i32, qd.i32),
@@ -40,7 +40,7 @@ def test_callable_template_mapper():
     assert mapper.lookup(False, (0, 0, 1))[0] == 0
     assert mapper.lookup(False, (0, 1, 0))[0] == 0
 
-    mapper = TemplateMapper(
+    mapper = KernelSpecializationMapper(
         (
             ArgMetadata(qd.i32, qd.i32),
             ArgMetadata(qd.Template, qd.Template),
@@ -68,7 +68,7 @@ def test_callable_template_mapper_numpy():
 
     import numpy as np
 
-    mapper = TemplateMapper(annotations, (0, 1, 2))
+    mapper = KernelSpecializationMapper(annotations, (0, 1, 2))
     assert mapper.lookup(False, (0, 0, np.ones(shape=(1, 2, 3), dtype=np.float32)))[0] == 0
     assert mapper.lookup(False, (0, 0, np.ones(shape=(1, 2, 4), dtype=np.float32)))[0] == 0
     assert mapper.lookup(False, (0, 0, np.ones(shape=(1, 2, 1), dtype=np.int32)))[0] == 1

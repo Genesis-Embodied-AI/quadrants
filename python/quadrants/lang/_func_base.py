@@ -74,9 +74,9 @@ from quadrants.types.utils import is_signed
 # scope to avoid per-call alloc.
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
+from ._kernel_specialization_mapper import KernelSpecializationMapper
 from ._kernel_types import KernelBatchedArgType
 from ._optional_annotation import split_optional
-from ._template_mapper import TemplateMapper
 from ._template_mapper_hotpath import _is_external_array
 
 MAX_ARG_NUM = 512
@@ -232,7 +232,7 @@ class FuncBase:
 
         self.check_parameter_annotations()
 
-        self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
+        self.mapper = KernelSpecializationMapper(self.arg_metas, self.template_slot_locations)
 
     def check_parameter_annotations(self) -> None:
         """
