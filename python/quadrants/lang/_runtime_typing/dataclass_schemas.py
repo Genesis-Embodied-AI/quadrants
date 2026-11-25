@@ -235,7 +235,7 @@ def infer_member_type(
     if isinstance(py_obj, Struct):
         declared = getattr(py_obj, "_qd_struct_type", None)
         if declared is not None:
-            return declared, True
+            return declared, False
 
         members = {name: infer_member_type(child, f"{path}.{name}", ancestor_ids)[0] for name, child in py_obj.items}
         key = tuple((name, id(dtype)) for name, dtype in members.items())

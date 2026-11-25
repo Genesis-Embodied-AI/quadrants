@@ -88,6 +88,7 @@ def test_inferred_member_check_requirements() -> None:
 
     tensor = qd.tensor(qd.f32, shape=2, backend=qd.Backend.NDARRAY)
     custom_tensor = CustomTensor(tensor._unwrap())
+    declared_struct = qd.types.struct(value=qd.i32)(value=1)
     for py_obj, expected in (
         (None, False),
         (1, False),
@@ -99,6 +100,7 @@ def test_inferred_member_check_requirements() -> None:
         (tensor._unwrap(), False),
         (qd.Vector([1, 2]), False),
         (qd.Struct(value=1), True),
+        (declared_struct, False),
         (Frozen(1), False),
         (UnsafeHash(1), False),
         (UnsafeHash(Mutable(1)), True),
@@ -109,13 +111,15 @@ def test_inferred_member_check_requirements() -> None:
         _, needs_member_check = infer_member_type(py_obj, "state.value", frozenset())
         assert needs_member_check is expected, type(py_obj)
 
-    state = Frozen(custom_tensor)
-    schema = cached_infer_dataclass_schema(state, "state")
-    assert not schema._qd_needs_member_check
-    assert cached_infer_dataclass_schema(state, "state") is schema
+    for member in (custom_tensor, declared_struct):
+        state = Frozen(member)
+        schema = cached_infer_dataclass_schema(state, "state")
+        assert not schema._qd_needs_member_check
+        assert cached_infer_dataclass_schema(state, "state") is schema
 
-    entry = SchemaNeedingMemberChecks(state, schema, (("value", False),), (qd.Tensor,))
-    assert not entry.member_guards
+        member_type = schema.__dataclass_fields__["value"].type
+        entry = SchemaNeedingMemberChecks(state, schema, (("value", False),), (member_type,))
+        assert not entry.member_guards
 
 
 @pytest.mark.parametrize("backend", ["numpy", "torch"])

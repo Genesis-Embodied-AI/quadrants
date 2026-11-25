@@ -10,6 +10,7 @@ from quadrants._tensor_wrapper import Tensor
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix
+from quadrants.lang.struct import Struct
 
 if TYPE_CHECKING:
     from typing import _SpecialForm
@@ -49,6 +50,8 @@ class SchemaNeedingMemberChecks:
                 if not cast("type[RuntimeDataclassSchema]", member_type)._qd_needs_member_check:
                     continue
             elif child is None or isinstance(child, (bool, int, float, np.generic, np.ndarray, Ndarray, Field, Matrix)):
+                continue
+            if isinstance(child, Struct) and getattr(child, "_qd_struct_type", None) is not None:
                 continue
             if torch is not None and isinstance(child, torch.Tensor):
                 continue
