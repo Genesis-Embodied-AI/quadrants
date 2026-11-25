@@ -6,11 +6,9 @@ from quadrants.lang import impl
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     collect_dataclass_schemas_in_data_oriented_args,
 )
-from quadrants.lang._runtime_typing.dataclass_schemas import (
-    prepare_kernel_dataclass_args_for_mapper,
-)
 from quadrants.lang._runtime_typing.specialization_signatures import (
     extract_dataclass_specialization_signatures,
+    prepare_kernel_dataclass_args_for_mapper,
 )
 from quadrants.lang._runtime_typing.types import FinalValueKeyCache
 from quadrants.lang.impl import Program
