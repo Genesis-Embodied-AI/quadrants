@@ -182,3 +182,31 @@ class SchemaNeedingMemberChecks:
             if current_member_type is not member_type:
                 return False
         return True
+
+
+class RuntimeDataclassFeatures(tuple[Any, ...]):
+    """Tuple-compatible field features whose dispatch identity also includes the inferred scalar types."""
+
+    schema: type[RuntimeDataclassSchema]
+
+    def __new__(cls, features: tuple[Any, ...], schema: type[RuntimeDataclassSchema]) -> "RuntimeDataclassFeatures":
+        """Attach the inferred schema to tuple-compatible dispatch features."""
+        result = super().__new__(cls, features)
+        result.schema = schema
+        return result
+
+    def __hash__(self) -> int:
+        """Hash the inferred schema key together with the field features."""
+        return hash((self.schema._qd_type_signature, tuple(self)))
+
+    def __eq__(self, other: object) -> bool:
+        """Compare both inferred schema keys and field features."""
+        return (
+            type(other) is type(self)
+            and self.schema._qd_type_signature == other.schema._qd_type_signature
+            and tuple.__eq__(self, other)
+        )
+
+    def __ne__(self, other: object) -> bool:
+        """Return whether the schema keys or field features differ."""
+        return not self == other

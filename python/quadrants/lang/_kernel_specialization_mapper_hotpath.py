@@ -30,7 +30,7 @@ import dataclasses
 import sys
 import weakref
 from dataclasses import _FIELD, _FIELDS
-from typing import Any, Union
+from typing import Any, Union, cast
 
 import numpy as np
 
@@ -54,6 +54,8 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.types import (
     DeferredMemberType,
     FinalValueSpecializationSignatureCache,
+    RuntimeDataclassFeatures,
+    RuntimeDataclassSchema,
 )
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -498,7 +500,7 @@ def _build_argument_specialization_signature(
                 ]
             )
         if is_runtime_schema:
-            key = RuntimeDataclassFeatures(key, annotation)
+            key = RuntimeDataclassFeatures(key, cast(type[RuntimeDataclassSchema], annotation))
         # Store the cache only for a ``Final``-free subtree; a Final-bearing one must revalidate every launch, so we
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
@@ -521,29 +523,3 @@ def _build_argument_specialization_signature(
         return arg.dtype
     # Use '#' as a placeholder because other kinds of arguments are not involved in template instantiation
     return "#"
-
-
-class RuntimeDataclassFeatures(tuple):
-    """Tuple-compatible field features whose dispatch identity also includes the inferred scalar types."""
-
-    def __new__(cls, features: tuple[Any, ...], schema: AnnotationType) -> "RuntimeDataclassFeatures":
-        """Attach the inferred schema to tuple-compatible dispatch features."""
-        result = super().__new__(cls, features)
-        result.schema = schema
-        return result
-
-    def __hash__(self) -> int:
-        """Hash the inferred schema key together with the field features."""
-        return hash((self.schema._qd_type_signature, tuple(self)))
-
-    def __eq__(self, other: object) -> bool:
-        """Compare both inferred schema keys and field features."""
-        return (
-            type(other) is type(self)
-            and self.schema._qd_type_signature == other.schema._qd_type_signature
-            and tuple.__eq__(self, other)
-        )
-
-    def __ne__(self, other: object) -> bool:
-        """Return whether the schema keys or field features differ."""
-        return not self == other
