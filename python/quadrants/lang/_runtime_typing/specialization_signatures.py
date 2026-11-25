@@ -1,15 +1,14 @@
 """Prepare runtime dataclass arguments and build their specialization signatures."""
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
+    collect_dataclass_schemas_in_data_oriented_args,
+)
 from quadrants.lang._runtime_typing.dataclass_schemas import (
     infer_kernel_dataclass_arg_types,
 )
-from quadrants.lang._runtime_typing.types import (
-    FinalValueKeyCache,
-    RuntimeDataclassSchema,
-)
+from quadrants.lang._runtime_typing.types import FinalValueKeyCache
 from quadrants.lang._template_mapper_hotpath import _extract_arg
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import get_member_at_path
@@ -65,15 +64,32 @@ def prepare_kernel_dataclass_args_for_mapper(
     return final_value_key_by_value_id
 
 
-def extract_dataclass_specialization_signatures(
+def prepare_dataclass_specialization_signatures(
     raise_on_templated_floats: bool,
     py_args: tuple[Any, ...],
-    arg_metas: Sequence[ArgMetadata],
-    launch_arg_schemas: Sequence[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]],
+    arg_metas: list[ArgMetadata],
+    template_slot_locations: list[int],
+    runtime_kernel: "Kernel | None",
     final_value_key_by_value_id: FinalValueKeyCache | None,
-) -> tuple[tuple[int, tuple[str, ...], Any], ...]:
-    """Return argument indices, attribute paths, and signatures for dataclasses beneath data-oriented arguments."""
-    return tuple(
+) -> tuple[tuple[tuple[int, tuple[str, ...], Any], ...], bool]:
+    """Collect nested dataclass schemas and update kernel metadata; return (signatures, disable_identity_cache).
+
+    Call after the identity-cache lookup so eligible cache hits skip schema collection.
+    """
+    launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(py_args, arg_metas, template_slot_locations)
+    if runtime_kernel is not None:
+        runtime_kernel._launch_arg_schemas = launch_arg_schemas
+        runtime_kernel._runtime_has_deferred |= any(
+            schema._qd_has_deferred_errors for _, _, schema in launch_arg_schemas
+        )
+
+    if not launch_arg_schemas:
+        return (), False
+
+    # Exclude dataclasses beneath data-oriented arguments from the identity cache.
+    # A nested dataclass member can change type while the containing argument keeps the same identity.
+    # A cache hit would then skip schema inference and could select the wrong compiled kernel.
+    signatures = tuple(
         (
             index,
             path,
@@ -87,3 +103,4 @@ def extract_dataclass_specialization_signatures(
         )
         for index, path, schema in launch_arg_schemas
     )
+    return signatures, True

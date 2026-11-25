@@ -3,11 +3,8 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
-from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
-    collect_dataclass_schemas_in_data_oriented_args,
-)
 from quadrants.lang._runtime_typing.specialization_signatures import (
-    extract_dataclass_specialization_signatures,
+    prepare_dataclass_specialization_signatures,
     prepare_kernel_dataclass_args_for_mapper,
 )
 from quadrants.lang._runtime_typing.types import FinalValueKeyCache
@@ -175,27 +172,20 @@ class TemplateMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        # Only calls without nested dataclasses enter the identity cache. Its hits can skip schema discovery.
-        launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(
-            args, self.arguments, self.template_slot_locations
+        nested_signatures, disable_identity_cache = prepare_dataclass_specialization_signatures(
+            raise_on_templated_floats,
+            args,
+            self.arguments,
+            self.template_slot_locations,
+            runtime_kernel,
+            final_value_key_by_value_id,
         )
-        # Exclude dataclasses beneath data-oriented arguments from this identity cache.
-        # A nested dataclass member can change type while the containing argument keeps the same identity.
-        # A cache hit would then skip schema inference and could select the wrong compiled kernel.
-        cache_disabled |= bool(launch_arg_schemas)
-        if runtime_kernel is not None:
-            runtime_kernel._launch_arg_schemas = launch_arg_schemas
-            runtime_kernel._runtime_has_deferred |= any(
-                schema._qd_has_deferred_errors for _, _, schema in launch_arg_schemas
-            )
-
-        key = self.extract(raise_on_templated_floats, args, final_value_key_by_value_id) + (
-            cached_get_container_alias_key(args),
+        cache_disabled |= disable_identity_cache
+        key = (
+            self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+            + (cached_get_container_alias_key(args),)
+            + nested_signatures
         )
-        if launch_arg_schemas:
-            key += extract_dataclass_specialization_signatures(
-                raise_on_templated_floats, args, self.arguments, launch_arg_schemas, final_value_key_by_value_id
-            )
         try:
             count = self.mapping[key]
         except KeyError:
