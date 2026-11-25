@@ -90,9 +90,10 @@ def annotation_has_final_subtree(annotation: Any) -> bool:
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 # ``type(None)`` belongs here so ``None`` arguments are treated like other primitives and excluded from the
-# weakref-based spec-key cache tracker in ``TemplateMapper.lookup``: ``weakref.ref(None)`` raises ``TypeError``, and
-# ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the spec-key cache entry for a
-# ``None`` argument is dropped and every such launch re-runs full spec-key extraction.
+# weakref-based specialization signature cache tracker in ``TemplateMapper.lookup``: ``weakref.ref(None)`` raises
+# ``TypeError``, and ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the
+# specialization signature cache entry for a ``None`` argument is dropped and every such launch re-runs full
+# specialization signature extraction.
 _primitive_types = {int, float, bool, type(None)}
 _np_ndarray = np.ndarray
 
@@ -200,8 +201,8 @@ def chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
 
 def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
-    reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
-    ndarrays — see the data_oriented branch in ``_extract_arg``.
+    reachable from ``arg``. Used by the template-mapper to refine the specialization signature for ``@qd.data_oriented``
+    args holding ndarrays - see the data_oriented branch in ``_extract_arg``.
     """
     # A cached path's leaf can stop being an ``Ndarray`` mid-lifetime (a ``qd.Tensor`` impl swapped for a
     # ``MatrixField``), hence the skip below rather than reading Ndarray-only accessors off it.
@@ -286,12 +287,12 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # 2. Different argument instances with same type and same value, will get templatized into separate kernels.
             return weakref.ref(arg)
         if is_data_oriented(arg):
-            # Same memory-leak avoidance as above — keep ``weakref.ref(arg)`` so the spec key never holds a strong
-            # reference to user state. But for data_oriented containers that hold ``Ndarray`` members, the live
-            # ``weakref`` alone is too coarse: same instance with ``state.x = other_ndarray`` of a different dtype/ndim
-            # would re-use the previously-compiled kernel, which was specialised for the old shape. Walk the reachable
-            # ndarrays and prepend their shape descriptors so dtype/ndim changes trigger re-specialisation. Mirrors what
-            # the dataclass branch below does via ``annotation_fields``.
+            # Same memory-leak avoidance as above - keep ``weakref.ref(arg)`` so the specialization signature never
+            # holds a strong reference to user state. But for data_oriented containers that hold ``Ndarray`` members,
+            # the live ``weakref`` alone is too coarse: same instance with ``state.x = other_ndarray`` of a different
+            # dtype/ndim would re-use the previously-compiled kernel, which was specialised for the old shape. Walk the
+            # reachable ndarrays and prepend their shape descriptors so dtype/ndim changes trigger re-specialisation.
+            # Mirrors what the dataclass branch below does via ``annotation_fields``.
             #
             # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
             # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
@@ -398,7 +399,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        # Serve the ``_qd_spec_key`` cache only in the default (non-strict) mode: the cached key is
+        # Serve the ``_qd_specialization_signature`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
         # write below refuses to store one, so this read falls through and re-runs validation each launch.
@@ -410,7 +411,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             try:
                 # Instance-level (not class-level): instances of one class may differ in memory layout. The reserved
                 # ``_qd_`` prefix avoids collision with a user field named ``_key``. Absent under ``slots=True``.
-                _key_hit = arg._qd_spec_key.get(id(annotation))
+                _key_hit = arg._qd_specialization_signature.get(id(annotation))
             except AttributeError:
                 _key_hit = None
             if _key_hit is not None and _key_hit[0] is annotation:
@@ -466,14 +467,16 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
             try:
-                _key_map = arg._qd_spec_key
+                _key_map = arg._qd_specialization_signature
             except AttributeError:
                 _key_map = None
             if _key_map is None:
                 try:
-                    object.__setattr__(arg, "_qd_spec_key", {id(annotation): (annotation, key)})
+                    # FIXME: Avoid setattr and store this cache without modifying passed-in objects.
+                    object.__setattr__(arg, "_qd_specialization_signature", {id(annotation): (annotation, key)})
                 except AttributeError:
-                    # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
+                    # Impossible to store _qd_specialization_signature at instance-level if 'slots=True'. It is
+                    # recomputed each time.
                     pass
             else:
                 _key_map[id(annotation)] = (annotation, key)
