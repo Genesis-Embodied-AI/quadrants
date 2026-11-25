@@ -4,7 +4,7 @@ Pins two contracts:
 
 1. **Cache stability under wrapping.** Calling the same kernel with a ``Tensor(impl)`` wrapper and with the bare
    ``impl`` must produce exactly *one* compiled-kernel cache entry, not two. This is gotcha A from the design doc
-   (§8.11): the unwrap hook must run *before* ``TemplateMapper.lookup`` computes ``id``-based hashes.
+   (Section 8.11): the unwrap hook must run *before* ``KernelSpecializationMapper.lookup`` computes ``id``-based hashes.
 
 2. **Functional equivalence.** A kernel called with a wrapper must read and write the same memory as the same kernel
    called with the bare impl, on both backends. No data corruption, no shape confusion.
@@ -73,7 +73,7 @@ def test_kernel_cache_no_fragmentation_under_wrapping(backend):
     assert n_after_wrapped == n_after_bare, (
         f"cache fragmented: {n_after_bare} entries after bare-impl call, "
         f"{n_after_wrapped} after wrapper call. The unwrap hook in "
-        f"@qd.kernel.__call__ must run before TemplateMapper.lookup so "
+        f"@qd.kernel.__call__ must run before KernelSpecializationMapper.lookup so "
         f"id(arg) matches across (impl) and (Tensor(impl)) call shapes."
     )
 

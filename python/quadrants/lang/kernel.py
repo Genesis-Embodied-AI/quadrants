@@ -42,7 +42,9 @@ from quadrants.lang import impl, runtime_ops
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._fast_caching.args_hasher import LaunchArgSchemas
-from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
+from quadrants.lang._kernel_specialization_mapper_hotpath import (
+    chain_has_mutable_container,
+)
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
     KernelSimplicityASTChecker,
@@ -651,7 +653,8 @@ class Kernel(FuncBase):
 
         callbacks: list[Callable[[], None]] = []
         launch_ctx = t_kernel.make_launch_context()
-        # Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.
+        # Special treatment for primitive types is unecessary and detrimental. See 'KernelSpecializationMapper.lookup'
+        # for details.
         args_hash: "ArgsHash" = (id(t_kernel), *[id(arg) for arg in args])
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
         # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between

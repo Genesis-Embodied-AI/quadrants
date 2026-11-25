@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any
 
 from quadrants.lang._container_aliases import cached_get_container_alias_key
+from quadrants.lang._kernel_specialization_mapper_hotpath import _extract_arg
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     collect_dataclass_schemas_in_data_oriented_args,
 )
@@ -10,11 +11,10 @@ from quadrants.lang._runtime_typing.dataclass_schemas import (
     infer_kernel_dataclass_arg_types,
 )
 from quadrants.lang._runtime_typing.types import FinalValueKeyCache
-from quadrants.lang._template_mapper_hotpath import _extract_arg
 from quadrants.lang.util import get_member_at_path
 
 if TYPE_CHECKING:
-    from quadrants.lang._template_mapper import TemplateMapper
+    from quadrants.lang._kernel_specialization_mapper import KernelSpecializationMapper
     from quadrants.lang.kernel import Kernel
 
 
@@ -66,7 +66,7 @@ def prepare_kernel_dataclass_args_for_mapper(
 
 
 def prepare_specialization_signature(
-    mapper: "TemplateMapper",
+    mapper: "KernelSpecializationMapper",
     raise_on_templated_floats: bool,
     py_args: tuple[Any, ...],
     runtime_kernel: "Kernel | None",

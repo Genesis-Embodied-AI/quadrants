@@ -1146,7 +1146,7 @@ class Matrix(QuadrantsOperations):
         return matrix_ops.cols(cols)
 
     def __hash__(self):
-        # TODO: refactor KernelTemplateMapper
+        # TODO: refactor KernelSpecializationMapper
         # If not, we get `unhashable type: Matrix` when
         # using matrices as template arguments.
         return id(self)

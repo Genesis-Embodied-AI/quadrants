@@ -85,7 +85,8 @@ AnnotationType = Union[
 def annotation_has_final_subtree(annotation: Any) -> bool:
     """True iff ``annotation`` is a dataclass type whose transitive subtree declares a ``Final`` field. The ``_FIELDS``
     probe is needed because ``subtree_has_final_fields`` would raise on the non-dataclass annotation shapes a kernel
-    arg can carry. ``TemplateMapper.lookup`` uses it to disable its instance-keyed cache for a Final-bearing mapper.
+    arg can carry. ``KernelSpecializationMapper.lookup`` uses it to disable its instance-keyed cache for a Final-bearing
+    mapper.
     """
     return getattr(annotation, _FIELDS, None) is not None and subtree_has_final_fields(annotation)
 
@@ -93,7 +94,8 @@ def annotation_has_final_subtree(annotation: Any) -> bool:
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 # ``type(None)`` belongs here so ``None`` arguments are treated like other primitives and excluded from the
-# weakref-based specialization signature cache tracker in ``TemplateMapper.lookup``: ``weakref.ref(None)`` raises
+# weakref-based specialization signature cache tracker in ``KernelSpecializationMapper.lookup``: ``weakref.ref(None)``
+# raises
 # ``TypeError``, and ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the
 # specialization signature cache entry for a ``None`` argument is dropped and every such launch re-runs full
 # specialization signature extraction.
