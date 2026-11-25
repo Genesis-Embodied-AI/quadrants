@@ -233,7 +233,7 @@ class ASTTransformer(Builder):
         if isinstance(values, matrix.Matrix):
             if not values.m == 1:
                 raise ValueError("Matrices with more than one columns cannot be unpacked")
-            values = values.entries
+            values = values._members
 
         # Unpack: a, b, c = qd.Vector([1., 2., 3.])
         if isinstance(values, impl.Expr) and values.ptr.is_tensor():
