@@ -206,7 +206,7 @@ def infer_member_type(
         return _array_annotation, False
 
     if isinstance(py_obj, BufferView):
-        return _buffer_annotation, True
+        return _buffer_annotation, False
 
     if isinstance(py_obj, (bool, np.bool_)):
         return primitive_types.u1, False
