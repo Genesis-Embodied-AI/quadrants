@@ -1430,3 +1430,31 @@ def test_host_matrix_to_numpy_preserves_dtype(backend):
             result = element.to_numpy()
             assert result.dtype == numpy_dtype
             np.testing.assert_array_equal(result, updated[0])
+
+
+@pytest.mark.parametrize("quant_kind", ["int", "fixed", "float"])
+@test_utils.test(arch=qd.cpu, require=qd.extension.quant)
+def test_quantized_matrix_to_numpy_preserves_compute_dtype(quant_kind: str) -> None:
+    """Quantized elements use their compute dtype even after their stored values change."""
+    if quant_kind == "int":
+        dtype = qd.types.quant.int(13, compute=qd.i32)
+        numpy_dtype = np.int32
+    elif quant_kind == "fixed":
+        dtype = qd.types.quant.fixed(16, max_value=8, compute=qd.f32)
+        numpy_dtype = np.float32
+    else:
+        dtype = qd.types.quant.float(exp=5, frac=10, compute=qd.f32)
+        numpy_dtype = np.float32
+
+    for matrix_type, dimensions in ((qd.Vector, (1,)), (qd.Matrix, (1, 1))):
+        field = matrix_type.field(*dimensions, dtype=dtype)
+        bitpack = qd.BitpackedFields(max_num_bits=32)
+        bitpack.place(field.get_scalar_field(0, 0))
+        qd.root.place(bitpack)
+        field[None] = np.full(dimensions, 1)
+        element = field[None]
+        for value in (1, 3):
+            field[None] = np.full(dimensions, value)
+            result = element.to_numpy()
+            assert result.dtype == numpy_dtype
+            np.testing.assert_array_equal(result, np.full(dimensions, value))
