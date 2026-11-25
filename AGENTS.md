@@ -43,4 +43,6 @@ Code-review agents: flag PRs that use a lower-level language than necessary when
 
 Method names must start with a verb in the imperative, such as `get`, `create`, `validate`, or `update`. Name the action the method performs, including validation when that is part of its purpose.
 
+Event callbacks may start with `on_` (including private names such as `_on_reset`). Names required by a base class, protocol, framework, or Python special method are also exempt from the imperative-verb requirement.
+
 Prefer explicit names over short names or abbreviations. For example, use `validate_and_get_final_field_names` rather than `final_field_names` when the method both validates fields and returns their names.
