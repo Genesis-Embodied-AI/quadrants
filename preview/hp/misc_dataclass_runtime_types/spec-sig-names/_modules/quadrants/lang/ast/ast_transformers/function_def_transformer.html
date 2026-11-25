@@ -751,8 +751,8 @@
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="c1"># qd.Tensor in @qd.func context: polymorphic pass-by-reference. Specialization signatures are only available for</span>
-        <span class="c1"># top-level @qd.kernel args. Unwrap any Tensor wrapper, then create the variable</span>
-        <span class="c1"># directly — ndarray and field impls are both valid pass-by-reference arguments.</span>
+        <span class="c1"># top-level @qd.kernel args. Unwrap any Tensor wrapper, then create the variable directly - ndarray and field</span>
+        <span class="c1"># impls are both valid pass-by-reference arguments.</span>
         <span class="k">if</span> <span class="n">argument_type</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
             <span class="n">data</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
             <span class="n">promoted</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_compile_context</span><span class="o">.</span><span class="n">current_pass</span><span class="o">.</span><span class="n">ndarray_to_any_array</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
