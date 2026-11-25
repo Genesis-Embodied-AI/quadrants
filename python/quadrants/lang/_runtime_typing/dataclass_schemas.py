@@ -366,9 +366,10 @@ def cached_infer_dataclass_schema(
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Deferred descriptions are reusable because debug is part of the instance-cache key.
     # Final-bearing paths still require validation.
-    if not needs_member_check or (
+    store_to_instance_cache = not needs_member_check or (
         is_frozen_dataclass(dataclass_type) and not has_final_fields and non_frozen_ancestor_path is None
-    ):
+    )
+    if store_to_instance_cache:
         if schema_by_compiler_settings_and_ancestor_path is None:
             schema_by_compiler_settings_and_ancestor_path = {}
             try:
