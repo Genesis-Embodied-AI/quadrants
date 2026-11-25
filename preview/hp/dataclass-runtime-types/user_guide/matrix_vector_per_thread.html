@@ -522,6 +522,15 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">a.outer_product(b)</span></code> — outer product of two vectors</p></li>
 </ul>
 </section>
+<section id="reading-a-matrix-or-vector-s-dtype-in-python">
+<span id="reading-a-matrix-or-vectors-dtype-in-python"></span><h2>Reading a matrix or vector’s dtype in Python<a class="headerlink" href="#reading-a-matrix-or-vector-s-dtype-in-python" title="Link to this heading">#</a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">.dtype</span></code> to read a <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> element type without reading its values or converting it to NumPy:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matrix</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]],</span> <span class="n">dt</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">matrix</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>  <span class="c1"># i32</span>
+</pre></div>
+</div>
+<p>The dtype is recorded when the matrix or vector is constructed. Changing element values preserves it. The property also works on elements read from matrix/vector fields and ndarrays. Quantized fields return their compute type, such as <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, rather than their packed storage type.</p>
+</section>
 </section>
 
 
@@ -578,6 +587,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#frobenius-inner-product-and-norm">Frobenius inner product and norm</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#matrix-vector-multiply">Matrix-vector multiply</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-operations">Other operations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reading-a-matrix-or-vector-s-dtype-in-python">Reading a matrix or vector’s dtype in Python</a></li>
 </ul>
   </nav></div>
 
