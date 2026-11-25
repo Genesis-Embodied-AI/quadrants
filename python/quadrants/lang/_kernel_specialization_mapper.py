@@ -1,11 +1,11 @@
 from functools import partial
-from typing import Any, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
 from quadrants.lang._runtime_typing.specialization_signatures import (
+    prepare_dataclass_specialization_signatures,
     prepare_kernel_dataclass_args_for_mapper,
-    prepare_specialization_signature,
 )
 from quadrants.lang._runtime_typing.types import FinalValueKeyCache
 from quadrants.lang.impl import Program
@@ -14,6 +14,7 @@ from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
+from ._container_aliases import cached_get_container_alias_key
 from ._kernel_specialization_mapper_hotpath import (
     _extract_arg,
     _primitive_types,
@@ -22,6 +23,10 @@ from ._kernel_specialization_mapper_hotpath import (
 )
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
+
+if TYPE_CHECKING:
+    from quadrants.lang.kernel import Kernel
+
 
 # Whether an arg of this class contributes to the args_hash ndarray-id walk in ``KernelSpecializationMapper.lookup``.
 # Only the
@@ -46,6 +51,32 @@ def _classify_disposition(arg: Any) -> object:
 
 
 Key: TypeAlias = tuple[Any, ...]
+
+
+def prepare_specialization_signature(
+    mapper: "KernelSpecializationMapper",
+    raise_on_templated_floats: bool,
+    py_args: tuple[Any, ...],
+    runtime_kernel: "Kernel | None",
+    final_value_key_by_value_id: FinalValueKeyCache | None,
+    cache_disabled: bool,
+) -> tuple[Key, bool]:
+    """Combine argument and aliasing signatures; return (signature, cache_disabled)."""
+    nested_signatures, disable_identity_cache = prepare_dataclass_specialization_signatures(
+        raise_on_templated_floats,
+        py_args,
+        mapper.arguments,
+        mapper.template_slot_locations,
+        runtime_kernel,
+        final_value_key_by_value_id,
+    )
+    signature = (
+        mapper.extract(raise_on_templated_floats, py_args, final_value_key_by_value_id)
+        + (cached_get_container_alias_key(py_args),)
+        + nested_signatures
+    )
+    cache_disabled |= disable_identity_cache
+    return signature, cache_disabled
 
 
 def _destroy_callback(specialization_mapper_ref: ReferenceType["KernelSpecializationMapper"], ref: ReferenceType):
