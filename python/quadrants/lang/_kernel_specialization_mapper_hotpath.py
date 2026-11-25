@@ -54,8 +54,8 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.types import (
     DeferredMemberType,
     FinalValueSpecializationSignatureCache,
-    RuntimeDataclassFeatures,
     RuntimeDataclassSchema,
+    RuntimeDataclassSpecializationSignature,
 )
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -500,7 +500,7 @@ def _build_argument_specialization_signature(
                 ]
             )
         if is_runtime_schema:
-            key = RuntimeDataclassFeatures(key, cast(type[RuntimeDataclassSchema], annotation))
+            key = RuntimeDataclassSpecializationSignature(key, cast(type[RuntimeDataclassSchema], annotation))
         # Store the cache only for a ``Final``-free subtree; a Final-bearing one must revalidate every launch, so we
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):

@@ -184,23 +184,25 @@ class SchemaNeedingMemberChecks:
         return True
 
 
-class RuntimeDataclassFeatures(tuple[Any, ...]):
-    """Tuple-compatible field features whose dispatch identity also includes the inferred scalar types."""
+class RuntimeDataclassSpecializationSignature(tuple[Any, ...]):
+    """Store field specialization signatures and the inferred schema for hashing and equality."""
 
     schema: type[RuntimeDataclassSchema]
 
-    def __new__(cls, features: tuple[Any, ...], schema: type[RuntimeDataclassSchema]) -> "RuntimeDataclassFeatures":
-        """Attach the inferred schema to tuple-compatible dispatch features."""
-        result = super().__new__(cls, features)
+    def __new__(
+        cls, field_specialization_signatures: tuple[Any, ...], schema: type[RuntimeDataclassSchema]
+    ) -> "RuntimeDataclassSpecializationSignature":
+        """Attach the inferred schema to the field specialization signatures."""
+        result = super().__new__(cls, field_specialization_signatures)
         result.schema = schema
         return result
 
     def __hash__(self) -> int:
-        """Hash the inferred schema key together with the field features."""
+        """Hash the inferred type signature and field specialization signatures."""
         return hash((self.schema._qd_type_signature, tuple(self)))
 
     def __eq__(self, other: object) -> bool:
-        """Compare both inferred schema keys and field features."""
+        """Compare inferred type signatures and field specialization signatures."""
         return (
             type(other) is type(self)
             and self.schema._qd_type_signature == other.schema._qd_type_signature
@@ -208,5 +210,5 @@ class RuntimeDataclassFeatures(tuple[Any, ...]):
         )
 
     def __ne__(self, other: object) -> bool:
-        """Return whether the schema keys or field features differ."""
+        """Return whether the specialization signatures differ."""
         return not self == other
