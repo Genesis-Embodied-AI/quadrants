@@ -7,7 +7,7 @@ from quadrants.lang._runtime_typing.specialization_signatures import (
     build_nested_dataclass_specialization_signatures,
     prepare_kernel_dataclass_args_for_mapper,
 )
-from quadrants.lang._runtime_typing.types import FinalValueKeyCache
+from quadrants.lang._runtime_typing.types import FinalValueSpecializationSignatureCache
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
@@ -76,7 +76,7 @@ class KernelSpecializationMapper:
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
-        final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
+        final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
     ) -> Key:
         # Optional ndarray + None gets its own key: _build_argument_specialization_signature's NdarrayType branch reads
         # .shape and raises on None.
@@ -101,7 +101,7 @@ class KernelSpecializationMapper:
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
-        final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
+        final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
         runtime_kernel=None,
     ) -> tuple[int, Key]:
         if len(args) != self.num_args:

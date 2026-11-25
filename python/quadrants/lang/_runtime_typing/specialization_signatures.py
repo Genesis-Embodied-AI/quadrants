@@ -11,7 +11,7 @@ from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
 from quadrants.lang._runtime_typing.dataclass_schemas import (
     infer_kernel_dataclass_arg_types,
 )
-from quadrants.lang._runtime_typing.types import FinalValueKeyCache
+from quadrants.lang._runtime_typing.types import FinalValueSpecializationSignatureCache
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import get_member_at_path
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 def prepare_kernel_dataclass_args_for_mapper(
     kernel: "Kernel", py_objs: tuple[Any, ...], args_hash: tuple[int, ...] | None = None
-) -> FinalValueKeyCache | None:
+) -> FinalValueSpecializationSignatureCache | None:
     """Update dataclass argument types, template slots, cache eligibility, and deferred-member status for a launch.
 
     Reuse metadata when argument identities and numeric defaults match a live mapper cache entry.
@@ -41,7 +41,7 @@ def prepare_kernel_dataclass_args_for_mapper(
         kernel.mapper._mapping_cache_tracker.clear()
     kernel._launch_arg_schemas = ()
     # Per-call cache: id(value) -> (value, specialization signature); retain the value to verify its identity.
-    final_value_specialization_signature_by_value_id: FinalValueKeyCache = {}
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache = {}
     kernel.arg_metas = infer_kernel_dataclass_arg_types(
         kernel.orig_arguments, py_objs, final_value_specialization_signature_by_value_id
     )
@@ -74,7 +74,7 @@ def build_nested_dataclass_specialization_signatures(
     arg_metas: list[ArgMetadata],
     template_slot_locations: list[int],
     runtime_kernel: "Kernel | None",
-    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None,
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None,
 ) -> tuple[tuple[int, tuple[str, ...], Any], ...]:
     """Collect nested dataclass schemas, update kernel metadata, and return their specialization signatures."""
     launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(py_args, arg_metas, template_slot_locations)

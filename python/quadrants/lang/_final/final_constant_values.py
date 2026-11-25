@@ -12,7 +12,9 @@ from quadrants.lang._final.final_class_identity import (
 from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
 
 if TYPE_CHECKING:
-    from quadrants.lang._runtime_typing.types import FinalValueKeyCache
+    from quadrants.lang._runtime_typing.types import (
+        FinalValueSpecializationSignatureCache,
+    )
 
 # Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"
@@ -67,7 +69,7 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
 
 
 def get_cached_or_validate_value_for_final_field_and_get_key(
-    value: object, final_value_specialization_signature_by_value_id: "FinalValueKeyCache | None"
+    value: object, final_value_specialization_signature_by_value_id: "FinalValueSpecializationSignatureCache | None"
 ) -> tuple[Any, ...]:
     """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
     cached = (

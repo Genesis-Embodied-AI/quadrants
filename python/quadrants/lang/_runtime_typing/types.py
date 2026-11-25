@@ -96,7 +96,7 @@ def create_dataclass_schema(
 
 
 # Object identity maps to the retained object and its type-tagged Final specialization signature.
-FinalValueKeyCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
+FinalValueSpecializationSignatureCache: TypeAlias = dict[int, tuple[Any, tuple[Any, ...]]]
 
 InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType

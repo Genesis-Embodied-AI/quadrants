@@ -26,7 +26,7 @@ from quadrants.lang._runtime_typing.deferred_errors import (
 from quadrants.lang._runtime_typing.types import (
     DataclassInstance,
     DeferredMemberType,
-    FinalValueKeyCache,
+    FinalValueSpecializationSignatureCache,
     InferenceContextKey,
     InferredMemberType,
     RuntimeDataclassSchema,
@@ -149,7 +149,7 @@ def infer_member_type(
     path: str,
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None = None,
-    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
 ) -> tuple[InferredMemberType | DeferredMemberType, bool]:
     """Return (member_type, needs_member_check) inferred from the arriving value.
 
@@ -253,7 +253,7 @@ def _infer_dataclass_runtime_member_types(
     path: str,
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None,
-    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None,
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None,
 ) -> tuple[
     "list[InferredMemberType | DeferredMemberType | _SpecialForm]",
     bool,
@@ -350,7 +350,7 @@ def cached_infer_dataclass_schema(
     path: str,
     ancestor_ids: frozenset[int] = frozenset(),
     non_frozen_ancestor_path: str | None = None,
-    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
 ) -> type[RuntimeDataclassSchema]:
     """Build or reuse a private schema class, validating mutable members before cache reuse when needed.
 
@@ -426,7 +426,7 @@ def cached_infer_dataclass_schema(
 def infer_kernel_dataclass_arg_types(
     arg_metas: list[ArgMetadata],
     py_objs: tuple[Any, ...],
-    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
 ) -> list[ArgMetadata]:
     """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []

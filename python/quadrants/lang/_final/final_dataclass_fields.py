@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from quadrants.lang._runtime_typing.types import (
         DeferredMemberType,
-        FinalValueKeyCache,
+        FinalValueSpecializationSignatureCache,
     )
 
 # typing.Final is a marker object, not an ordinary Python class like int.
@@ -44,7 +44,7 @@ def infer_final_field_annotation(
     py_obj: object,
     non_frozen_ancestor_path: str | None,
     name: str,
-    final_value_specialization_signature_by_value_id: "FinalValueKeyCache | None" = None,
+    final_value_specialization_signature_by_value_id: "FinalValueSpecializationSignatureCache | None" = None,
 ) -> "_SpecialForm | DeferredMemberType":
     """Infer a Final field's schema annotation from its runtime value and ancestor constraints.
 
