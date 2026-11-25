@@ -17,10 +17,7 @@ from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
 from quadrants.lang._final.final_annotation import dataclass_field_is_final
-from quadrants.lang._final.final_dataclass_fields import (
-    final_field_names,
-    infer_final_field_annotation,
-)
+from quadrants.lang._final.final_dataclass_fields import infer_final_field_annotation
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
@@ -366,8 +363,6 @@ def cached_infer_dataclass_schema(
             for (name, _), member_type in zip(field_names_and_final, member_types)
         }
         schema = create_dataclass_schema(dataclass_type, fields, needs_member_check, has_deferred_error)
-        # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
-        final_field_names(schema)
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
     # Deferred descriptions are reusable because debug is part of the instance-cache key.
     # Final-bearing paths still require validation.
