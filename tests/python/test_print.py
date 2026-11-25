@@ -677,8 +677,5 @@ def test_print_template_matrix_is_unsupported() -> None:
         print(value)
 
     for value in (qd.Matrix([[1, 2], [3, 4]]), qd.Vector([1, 2])):
-        with pytest.raises(
-            qd.QuadrantsCompilationError, match="NotImplementedError: Printing this Python Matrix or Vector"
-        ):
-            # The compiler wraps Python exceptions with the kernel source location.
+        with pytest.raises(NotImplementedError, match="Printing this Python Matrix or Vector"):
             show(value)
