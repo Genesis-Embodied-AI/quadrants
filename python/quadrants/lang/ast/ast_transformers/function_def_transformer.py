@@ -63,7 +63,7 @@ class FunctionDefTransformer:
         ctx: FuncCompilePassContext,
         annotation: Any,
         name: str,
-        arg_spec_sig: tuple[tuple[Any, ...], ...] | None,
+        this_arg_spec_sig: tuple[tuple[Any, ...], ...] | None,
         prefix_name: str,
         py_value: Any = None,
     ) -> tuple[bool, Any]:
@@ -75,15 +75,15 @@ class FunctionDefTransformer:
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
         # Bind an absent optional ndarray directly to None so qd.static(x is not None) evaluates to False.
-        if arg_spec_sig is OPTIONAL_ABSENT:
+        if this_arg_spec_sig is OPTIONAL_ABSENT:
             return False, None
-        # qd.Tensor value-dispatch. The first slot of arg_spec_sig is a string marker placed by
+        # qd.Tensor value-dispatch. The first slot of this_arg_spec_sig is a string marker placed by
         # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
-            assert arg_spec_sig is not None
-            marker = arg_spec_sig[0]
+            assert this_arg_spec_sig is not None
+            marker = this_arg_spec_sig[0]
             if marker == _TENSOR_T_NDARRAY_MARKER:
-                raw_element_type, ndim, needs_grad, boundary, layout = arg_spec_sig[1:]
+                raw_element_type, ndim, needs_grad, boundary, layout = this_arg_spec_sig[1:]
                 return True, (
                     kernel_arguments.decl_ndarray_arg,
                     (
@@ -105,13 +105,13 @@ class FunctionDefTransformer:
             return True, (
                 kernel_arguments.decl_sparse_matrix,
                 (
-                    to_quadrants_type(arg_spec_sig),
+                    to_quadrants_type(this_arg_spec_sig),
                     full_name,
                 ),
             )
         if isinstance(annotation, buffer_view_type.BufferViewType):
-            assert arg_spec_sig is not None
-            raw_element_type, ndim, needs_grad, boundary = arg_spec_sig
+            assert this_arg_spec_sig is not None
+            raw_element_type, ndim, needs_grad, boundary = this_arg_spec_sig
             arr = kernel_arguments.decl_ndarray_arg(
                 to_quadrants_type(raw_element_type),
                 ndim,
@@ -123,13 +123,13 @@ class FunctionDefTransformer:
             size = kernel_arguments.decl_scalar_arg(primitive_types.i32, full_name + "_size")
             return False, BufferView(arr, offset, size)
         if isinstance(annotation, ndarray_type.NdarrayType):
-            assert arg_spec_sig is not None
+            assert this_arg_spec_sig is not None
             raw_element_type: DataTypeCxx
             ndim: int
             needs_grad: bool
             boundary: int
             # Tensors layout is the trailing slot; None for legacy / identity.
-            raw_element_type, ndim, needs_grad, boundary, layout = arg_spec_sig
+            raw_element_type, ndim, needs_grad, boundary, layout = this_arg_spec_sig
             return True, (
                 kernel_arguments.decl_ndarray_arg,
                 (
@@ -152,7 +152,7 @@ class FunctionDefTransformer:
         ctx: FuncCompilePassContext,
         argument_name: str,
         argument_type: Any,
-        arg_spec_sig: tuple[Any, ...] | None,
+        this_arg_spec_sig: tuple[Any, ...] | None,
         arg_value: Any = None,
         reject_in_static_scope: bool = False,
     ) -> None:
@@ -183,7 +183,7 @@ class FunctionDefTransformer:
                         ctx,
                         flat_name,
                         field.type,
-                        arg_spec_sig[field_idx] if arg_spec_sig is not None else None,
+                        this_arg_spec_sig[field_idx] if this_arg_spec_sig is not None else None,
                         child,
                         reject_in_static_scope,
                     )
@@ -193,8 +193,8 @@ class FunctionDefTransformer:
                     value = child
                 else:
                     field_spec_sig = (
-                        arg_spec_sig[field_idx]
-                        if arg_spec_sig is not None
+                        this_arg_spec_sig[field_idx]
+                        if this_arg_spec_sig is not None
                         else _extract_arg(False, child, field.type, flat_name)
                     )
                     needs_declaration_call, value = FunctionDefTransformer._decl_and_create_variable(
@@ -210,7 +210,7 @@ class FunctionDefTransformer:
                 ctx,
                 argument_type,
                 argument_name,
-                arg_spec_sig if ctx.arg_spec_sigs is not None else None,
+                this_arg_spec_sig if ctx.arg_spec_sigs is not None else None,
                 "",
                 arg_value,
             )
