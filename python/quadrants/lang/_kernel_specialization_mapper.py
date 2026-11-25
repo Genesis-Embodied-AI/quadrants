@@ -10,14 +10,14 @@ from quadrants.types import ndarray_type
 
 from .. import _warnings
 from ._container_aliases import cached_get_container_alias_key
-from ._kernel_types import ArgsHash
-from ._optional_annotation import OPTIONAL_ABSENT
-from ._template_mapper_hotpath import (
+from ._kernel_specialization_mapper_hotpath import (
     _extract_arg,
     _primitive_types,
     _struct_nd_paths_for,
     annotation_has_final_subtree,
 )
+from ._kernel_types import ArgsHash
+from ._optional_annotation import OPTIONAL_ABSENT
 
 # Whether an arg of this class contributes to the args_hash ndarray-id walk in ``KernelSpecializationMapper.lookup``.
 # Only the

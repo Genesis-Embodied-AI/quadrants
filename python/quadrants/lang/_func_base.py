@@ -75,9 +75,9 @@ from quadrants.types.utils import is_signed
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_specialization_mapper import KernelSpecializationMapper
+from ._kernel_specialization_mapper_hotpath import _is_external_array
 from ._kernel_types import KernelBatchedArgType
 from ._optional_annotation import split_optional
-from ._template_mapper_hotpath import _is_external_array
 
 MAX_ARG_NUM = 512
 

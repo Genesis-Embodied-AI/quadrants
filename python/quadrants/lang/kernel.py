@@ -42,7 +42,9 @@ from quadrants.lang import impl, runtime_ops
 # construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
-from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
+from quadrants.lang._kernel_specialization_mapper_hotpath import (
+    chain_has_mutable_container,
+)
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
     KernelSimplicityASTChecker,

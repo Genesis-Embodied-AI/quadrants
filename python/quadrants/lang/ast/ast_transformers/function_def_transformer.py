@@ -26,9 +26,9 @@ from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
+from quadrants.lang._kernel_specialization_mapper_hotpath import _extract_arg
 from quadrants.lang._name_utils import create_flat_name, create_flat_name_from_parts
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
-from quadrants.lang._template_mapper_hotpath import _extract_arg
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     MemberBinding,
@@ -78,7 +78,7 @@ class FunctionDefTransformer:
         if this_arg_features is OPTIONAL_ABSENT:
             return False, None
         # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
-        # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
+        # _kernel_specialization_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:
             assert this_arg_features is not None
             marker = this_arg_features[0]
@@ -474,7 +474,7 @@ class FunctionDefTransformer:
             return None
 
         # BufferView arguments are passed by reference.
-        # Dtype validation happens at the kernel boundary (_template_mapper_hotpath._extract_arg),
+        # Dtype validation happens at the kernel boundary (_kernel_specialization_mapper_hotpath._extract_arg),
         # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
         if isinstance(argument_type, buffer_view_type.BufferViewType):
             if not isinstance(data, BufferView):

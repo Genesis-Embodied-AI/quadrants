@@ -1,7 +1,7 @@
 """Tests for ``qd.Tensor`` as an annotation in ``@qd.func`` parameters and struct fields.
 
 ``_transform_func_arg`` must dispatch ``Tensor`` annotations in ``@qd.func`` parameters and struct fields,
-matching the top-level ``@qd.kernel`` parameter support in ``_template_mapper_hotpath``.
+matching the top-level ``@qd.kernel`` parameter support in ``_kernel_specialization_mapper_hotpath``.
 """
 
 import dataclasses

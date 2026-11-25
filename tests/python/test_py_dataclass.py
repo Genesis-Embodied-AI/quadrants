@@ -1238,14 +1238,14 @@ def test_substruct_deep_nesting() -> None:
 def test_template_mapper_cache(use_slots, monkeypatch):
     # Mock '_extract_arg' to track the number of (recursive) calls
     counter = 0
-    _extract_arg_orig = qd.lang._template_mapper_hotpath._extract_arg
+    _extract_arg_orig = qd.lang._kernel_specialization_mapper_hotpath._extract_arg
 
     def _extract_arg(*args, **kwargs):
         nonlocal counter
         counter += 1
         return _extract_arg_orig(*args, **kwargs)
 
-    monkeypatch.setattr("quadrants.lang._template_mapper_hotpath._extract_arg", _extract_arg)
+    monkeypatch.setattr("quadrants.lang._kernel_specialization_mapper_hotpath._extract_arg", _extract_arg)
 
     @dataclass(frozen=True, slots=use_slots)
     class MyStruct:
