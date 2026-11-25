@@ -97,7 +97,6 @@ def test_ndarray_reset() -> None:
 def test_reset_releases_template_arguments() -> None:
     """Release arguments retained by specialization signatures and reuse the kernel after reinitialization."""
 
-    @qd.data_oriented
     class Data:
         def __init__(self, value: int) -> None:
             self.field = qd.field(qd.i32, shape=())
