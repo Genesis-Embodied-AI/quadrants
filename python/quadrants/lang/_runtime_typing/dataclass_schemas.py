@@ -23,7 +23,7 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
-from quadrants.lang._runtime_typing.runtime_dataclass_guards import (
+from quadrants.lang._runtime_typing.schema_member_checks import (
     SchemaNeedingMemberChecks,
 )
 from quadrants.lang._runtime_typing.types import (

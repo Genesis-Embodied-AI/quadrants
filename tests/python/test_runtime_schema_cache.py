@@ -11,7 +11,7 @@ from quadrants.lang._runtime_typing.dataclass_schemas import (
     cached_infer_dataclass_schema,
     infer_member_type,
 )
-from quadrants.lang._runtime_typing.runtime_dataclass_guards import (
+from quadrants.lang._runtime_typing.schema_member_checks import (
     SchemaNeedingMemberChecks,
 )
 
