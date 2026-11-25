@@ -1,10 +1,8 @@
-# type: ignore
-
 import functools
 import numbers
 from collections.abc import Iterable
 from itertools import product
-from typing import cast
+from typing import NoReturn, cast
 
 import numpy as np
 
@@ -91,7 +89,7 @@ def _gen_swizzles(cls):
         cls._keygroup_to_checker[key_group] = make_valid_attribs_checker(key_group)
         for index, attr in enumerate(key_group):
 
-            def gen_property(attr, attr_idx, key_group):
+            def gen_component_property(attr, attr_idx, key_group):
                 checker = cls._keygroup_to_checker[key_group]
 
                 def prop_getter(instance):
@@ -105,7 +103,7 @@ def _gen_swizzles(cls):
 
                 return property(prop_getter, prop_setter)
 
-            prop = gen_property(attr, index, key_group)
+            prop = gen_component_property(attr, index, key_group)
             setattr(cls, attr, prop)
             cls._swizzle_to_keygroup[attr] = key_group
 
@@ -115,7 +113,7 @@ def _gen_swizzles(cls):
         sw_patterns = filter(lambda p: len(p) > 1, sw_patterns)
         for prop_key in sw_patterns:
             # Create a function for value capturing
-            def gen_property(pattern, key_group):
+            def gen_swizzle_property(pattern, key_group):
                 checker = cls._keygroup_to_checker[key_group]
 
                 def prop_getter(instance):
@@ -136,7 +134,7 @@ def _gen_swizzles(cls):
                 prop = property(prop_getter, prop_setter)
                 return prop
 
-            prop = gen_property(prop_key, key_group)
+            prop = gen_swizzle_property(prop_key, key_group)
             setattr(cls, prop_key, prop)
             cls._swizzle_to_keygroup[prop_key] = key_group
     return cls
@@ -263,13 +261,14 @@ class Matrix(QuadrantsOperations):
     _is_matrix_class = True
     __array_priority__ = 1000
 
+    # Numeric matrices store values in _entries; field/ndarray-backed matrices store descriptors in _accessors.
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
             raise QuadrantsTypeError("An Matrix/Vector can only be initialized with an array-like object")
         if len(arr) == 0:
             self.ndim = 0
             self.n, self.m = 0, 0
-            self.entries = np.array([])
+            self._entries = np.array([])
             self.is_host_access = False
         elif isinstance(arr[0], Matrix):
             raise Exception("cols/rows required when using list of vectors")
@@ -277,19 +276,19 @@ class Matrix(QuadrantsOperations):
             self.ndim = 2
             self.n, self.m = len(arr), len(arr[0])
             if isinstance(arr[0][0], (SNodeHostAccess, NdarrayHostAccess)):
-                self.entries = arr
+                self._accessors = arr
                 self.is_host_access = True
             else:
-                self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
+                self._entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
         else:  # vector
             self.ndim = 1
             self.n, self.m = len(arr), 1
             if isinstance(arr[0], (SNodeHostAccess, NdarrayHostAccess)):
-                self.entries = arr
+                self._accessors = arr
                 self.is_host_access = True
             else:
-                self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
+                self._entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
         if self.n * self.m > 144:
@@ -369,30 +368,33 @@ class Matrix(QuadrantsOperations):
             assert len(indices) in [1, 2]
             assert len(indices) == self.ndim, f"Expected {self.ndim} indices, got {len(indices)}"
             if self.ndim == 1:
-                self.entries[indices[0]] = item
+                self._entries[indices[0]] = item
             else:
-                self.entries[indices[0]][indices[1]] = item
+                self._entries[indices[0]][indices[1]] = item
 
     def _get_entry(self, indices):
         if not isinstance(indices, (list, tuple)):
             indices = [indices]
         assert len(indices) in [1, 2]
         assert len(indices) == self.ndim, f"Expected {self.ndim} indices, got {len(indices)}"
+        components = self._members
         if self.ndim == 1:
-            return self.entries[indices[0]]
-        return self.entries[indices[0]][indices[1]]
+            return components[indices[0]]
+
+        return components[indices[0]][indices[1]]
 
     def _get_slice(self, a, b):
+        # FIXME: _get_entry expects one index tuple; repair this legacy slice helper separately.
         if isinstance(a, slice):
             a = range(a.start or 0, a.stop or self.n, a.step or 1)
         if isinstance(b, slice):
             b = range(b.start or 0, b.stop or self.m, b.step or 1)
         if isinstance(a, range) and isinstance(b, range):
-            return Matrix([[self._get_entry(i, j) for j in b] for i in a])
+            return Matrix([[self._get_entry(i, j) for j in b] for i in a])  # pyright: ignore[reportCallIssue]
         if isinstance(a, range):  # b is not range
-            return Vector([self._get_entry(i, b) for i in a])
+            return Vector([self._get_entry(i, b) for i in a])  # pyright: ignore[reportCallIssue]
         # a is not range while b is range
-        return Vector([self._get_entry(a, j) for j in b])
+        return Vector([self._get_entry(a, j) for j in b])  # pyright: ignore[reportCallIssue]
 
     @python_scope
     def _set_entries(self, value):
@@ -401,23 +403,23 @@ class Matrix(QuadrantsOperations):
         if self.is_host_access:
             if self.ndim == 1:
                 for i in range(self.n):
-                    _write_host_access(self.entries[i], value[i])
+                    _write_host_access(self._accessors[i], value[i])
             else:
                 for i in range(self.n):
                     for j in range(self.m):
-                        _write_host_access(self.entries[i][j], value[i][j])
+                        _write_host_access(self._accessors[i][j], value[i][j])
         else:
             if self.ndim == 1:
                 for i in range(self.n):
-                    self.entries[i] = value[i]
+                    self._entries[i] = value[i]
             else:
                 for i in range(self.n):
                     for j in range(self.m):
-                        self.entries[i][j] = value[i][j]
+                        self._entries[i][j] = value[i][j]
 
     @property
     def _members(self):
-        return self.entries
+        return self._accessors if self.is_host_access else self._entries
 
     def to_list(self):
         """Return this matrix as a 1D `list`.
@@ -427,10 +429,10 @@ class Matrix(QuadrantsOperations):
         """
         if self.is_host_access:
             if self.ndim == 1:
-                return [_read_host_access(self.entries[i]) for i in range(self.n)]
+                return [_read_host_access(self._accessors[i]) for i in range(self.n)]
             assert self.ndim == 2
-            return [[_read_host_access(self.entries[i][j]) for j in range(self.m)] for i in range(self.n)]
-        return self.entries.tolist()
+            return [[_read_host_access(self._accessors[i][j]) for j in range(self.m)] for i in range(self.n)]
+        return self._entries.tolist()
 
     @quadrants_scope
     def cast(self, dtype):
@@ -729,23 +731,14 @@ class Matrix(QuadrantsOperations):
         """
         if self.is_host_access:
             return np.array(self.to_list())
-        return self.entries
+        return self._entries
 
     @quadrants_scope
-    def __qd_repr__(self):
-        yield "["
-        for i in range(self.n):
-            if i:
-                yield ", "
-            if self.m != 1:
-                yield "["
-            for j in range(self.m):
-                if j:
-                    yield ", "
-                yield self(i, j)
-            if self.m != 1:
-                yield "]"
-        yield "]"
+    def __qd_repr__(self) -> NoReturn:
+        """Reject kernel formatting of a Python Matrix or Vector object."""
+        raise NotImplementedError(
+            "Printing this Python Matrix or Vector inside a kernel is not implemented; print its scalar elements instead."
+        )
 
     def __str__(self):
         """Python scope matrix print support."""
@@ -926,6 +919,8 @@ class Matrix(QuadrantsOperations):
         entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*member_groups)
 
         field = MatrixField(entries, n, m, element_dim)
+        grad_field = None
+        dual_field = None
         if all(entries_grad):
             grad_field = MatrixField(entries_grad, n, m, element_dim)
             field._set_grad(grad_field)
@@ -984,6 +979,7 @@ class Matrix(QuadrantsOperations):
                         ScalarField(e), offset=phys_offset
                     )
                 if needs_grad:
+                    assert grad_field is not None
                     for e in grad_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
@@ -994,6 +990,7 @@ class Matrix(QuadrantsOperations):
                                 ScalarField(e), offset=phys_offset
                             )
                 if needs_dual:
+                    assert dual_field is not None
                     for e in dual_field._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
@@ -1001,19 +998,23 @@ class Matrix(QuadrantsOperations):
             else:
                 impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(field, offset=phys_offset)
                 if needs_grad:
+                    assert grad_field is not None
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(grad_field, offset=phys_offset)
                     if entries_grad_checkbit_field is not None:
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             entries_grad_checkbit_field, offset=phys_offset
                         )
                 if needs_dual:
+                    assert dual_field is not None
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(dual_field, offset=phys_offset)
             if order is not None:
                 _qd_layout = tuple(axis_seq)
                 field._qd_layout = _qd_layout
                 if needs_grad:
+                    assert grad_field is not None
                     grad_field._qd_layout = _qd_layout
                 if needs_dual:
+                    assert dual_field is not None
                     dual_field._qd_layout = _qd_layout
         impl.get_runtime().field_initializers.add(field, captured_fill_value)
         return field
@@ -1236,7 +1237,10 @@ class Vector(Matrix):
 
     @classmethod
     @python_scope
-    def ndarray(cls, n, dtype, shape, needs_grad=False, *, fill: _FillValue | None = None):
+    # Vector factories omit the matrix column-count parameter.
+    def ndarray(  # pyright: ignore[reportIncompatibleMethodOverride]
+        cls, n, dtype, shape, needs_grad=False, *, fill: _FillValue | None = None
+    ):
         """Defines a Quadrants ndarray with vector elements.
 
         Args:
@@ -1265,7 +1269,8 @@ class Vector(Matrix):
         return apply_initial_ndarray_fill(arr, fill)
 
     @classmethod
-    def tensor(cls, n, dtype, shape, **kwargs):
+    # Vector factories omit the matrix column-count parameter.
+    def tensor(cls, n, dtype, shape, **kwargs):  # pyright: ignore[reportIncompatibleMethodOverride]
         """Allocate a tensor whose elements are length-``n`` vectors.
 
         Equivalent to ``qd.tensor(qd.types.vector(n, dtype), shape, **kwargs)``.
@@ -1376,10 +1381,7 @@ class MatrixField(Field):
         length = len(paths[0])
         if any(len(path) != length or qd_python_core.is_quant(path[length - 1]._dtype) for path in paths):
             return
-        for i in range(length):
-            if any(path[i] != paths[0][i] for path in paths):
-                depth_below_lca = i
-                break
+        depth_below_lca = next(i for i in range(length) if any(path[i] != paths[0][i] for path in paths))
         for i in range(depth_below_lca, length - 1):
             if any(
                 path[i].ptr.type != qd_python_core.SNodeType.dense
@@ -1440,7 +1442,8 @@ class MatrixField(Field):
             field_fill_quadrants_scope(self, val)
 
     @python_scope
-    def to_numpy(self, keep_dims=False, dtype=None, *, copy=True):
+    # MatrixField retains its public keep_dims parameter before dtype.
+    def to_numpy(self, keep_dims=False, dtype=None, *, copy=True):  # pyright: ignore[reportIncompatibleMethodOverride]
         """Converts the field instance to a NumPy array.
 
         Args:
@@ -1550,7 +1553,8 @@ class MatrixField(Field):
         self[key]._set_entries(value)
 
     @python_scope
-    def __getitem__(self, key):
+    # Matrix fields return matrix/vector elements rather than scalar field values.
+    def __getitem__(self, key):  # pyright: ignore[reportIncompatibleMethodOverride]
         self._initialize_host_accessors()
         key = self._pad_key(key)
         _host_access = self._host_access(key)
@@ -1825,7 +1829,8 @@ class VectorType(MatrixType):
         self._reject_if_unpacked("create a field of")
         return Vector.field(self.n, dtype=self.dtype, **kwargs)
 
-    def ndarray(self, **kwargs):
+    # VectorType creates VectorNdarray, while MatrixType creates MatrixNdarray.
+    def ndarray(self, **kwargs):  # pyright: ignore[reportIncompatibleMethodOverride]
         self._reject_if_unpacked("create an ndarray of")
         return Vector.ndarray(self.n, dtype=self.dtype, **kwargs)
 
@@ -1887,7 +1892,8 @@ class MatrixNdarray(Ndarray):
             value = [[i] for i in value]
         for i in range(self.n):
             for j in range(self.m):
-                self[key][i, j] = value[i][j]
+                # A scalar index returns a matrix/vector; BufferView is returned only for slices.
+                self[key][i, j] = value[i][j]  # pyright: ignore[reportIndexIssue]
 
     @python_scope
     def __getitem__(self, key):
@@ -2038,7 +2044,8 @@ class VectorNdarray(Ndarray):
         if not isinstance(value, (list, tuple)):
             value = list(value)
         for i in range(self.n):
-            self[key][i] = value[i]
+            # A scalar index returns a matrix/vector; BufferView is returned only for slices.
+            self[key][i] = value[i]  # pyright: ignore[reportIndexIssue]
 
     @python_scope
     def __getitem__(self, key):

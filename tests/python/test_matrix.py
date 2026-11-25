@@ -1378,10 +1378,10 @@ def test_matrix_to_numpy_with_offset(dtype, shape, offset, m, n):
 @test_utils.test()
 def test_matrix_dtype():
     a = qd.types.vector(3, dtype=qd.f32)([0, 1, 2])
-    assert a.entries.dtype == np.float32
+    assert a._entries.dtype == np.float32
 
     b = qd.types.matrix(2, 2, dtype=qd.i32)([[0, 1], [2, 3]])
-    assert b.entries.dtype == np.int32
+    assert b._entries.dtype == np.int32
 
 
 @test_utils.test()
