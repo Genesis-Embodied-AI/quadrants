@@ -21,11 +21,7 @@ from quadrants.types import buffer_view_type, ndarray_type
 
 
 class DataclassOptions(Protocol):
-    """Describe the attributes we read from Python's existing __dataclass_params__ object.
-
-    This protocol tells static type checkers that frozen and unsafe_hash are booleans. We do not create a
-    DataclassOptions object or attach one to the dataclass.
-    """
+    """Describe the attributes we read from Python's existing __dataclass_params__ object."""
 
     frozen: bool
     unsafe_hash: bool
