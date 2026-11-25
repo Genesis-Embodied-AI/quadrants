@@ -199,6 +199,8 @@ Do not bypass a frozen dataclass's assignment restrictions with `object.__setatt
 
 ### Compile-time constant fields: `typing.Final`
 
+Enum members used in `Final` fields, and their enum class definitions, must remain unchanged after their first use in a kernel. Modifying them afterward is unsupported.
+
 Final field values must be exact Python `bool`, `int`, `float`, or `str` objects, or supported enum members. NumPy scalars and custom non-enum scalar subclasses are rejected, including as enum underlying values. Convert NumPy scalars to the corresponding built-in Python type explicitly.
 
 
