@@ -121,23 +121,13 @@ class TemplateMapper:
             prog = self._prog_weakref()
         assert prog is not None
 
-        # Note that it is not necessary to handle primitive types separately here because primitive types are
-        # immutable and therefore identical primitive values usually reuse the same addresses for efficiency unless
-        # extra effort is made to do otherwise (this behavior is referring to as "interning"). Avoiding special
-        # branching for primitive types dramatically improve performance of hash computation.
+        # Use argument identities for the shortcut cache; misses fall back to the full specialization signature.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
         if runtime_kernel is not None:
             final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
-        # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
-        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the specialization signature cache would serve
-        # an entry compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
-        #
-        # Only ``template_slot_locations`` is iterated: a data_oriented container can only appear at a ``qd.template()``
-        # position (a typed-dataclass arg carries a dataclass type, and data_oriented classes are never dataclasses).
-        #
-        # PERF: the ``arg.__dict__["_qd_nd_paths"]`` lookup is inlined rather than left to ``_struct_nd_paths_for``,
-        # which costs ~60ns/call at 4 template args - ~15% of this loop. The call remains for the cold-miss cases.
+        # Include array-member identities so replacing an array cannot reuse a mapping for its previous dtype or rank.
+        # Search template arguments, which include data-oriented objects.
         nd_ids: list = []
         for i in self.template_slot_locations:
             arg = args[i]
@@ -148,6 +138,7 @@ class TemplateMapper:
                 _class_needs_ndarray_member_walk[cls] = disposition
             if disposition is _SKIP:
                 continue
+            # Inline the cached-path lookup to avoid a helper call on each launch.
             try:
                 paths = arg.__dict__["_qd_nd_paths"]
             except (AttributeError, KeyError):
