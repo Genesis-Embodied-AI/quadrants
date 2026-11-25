@@ -518,9 +518,10 @@ class Kernel(FuncBase):
         # parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker
         # happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is
         # the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``
-        # cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the
-        # steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)
-        # are excluded because that combination is a legitimate pattern routed through the data-oriented path.
+        # cache-hit early return above, so it only runs on the first compile for each unique specialization signature -
+        # zero cost on the steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over
+        # ``@dataclasses.dataclass``) are excluded because that combination is a legitimate pattern routed through the
+        # data-oriented path.
         for arg_meta, val in zip(self.arg_metas, py_args):
             ann = arg_meta.annotation
             if ann is not template and type(ann) is not template:
