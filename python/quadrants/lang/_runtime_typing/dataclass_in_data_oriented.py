@@ -6,7 +6,10 @@ from quadrants import _warnings
 from quadrants.lang._runtime_typing.dataclass_schemas import (
     cached_infer_dataclass_schema,
 )
-from quadrants.lang._runtime_typing.types import RuntimeDataclassSchema
+from quadrants.lang._runtime_typing.types import (
+    FinalValueSpecializationSignatureCache,
+    RuntimeDataclassSchema,
+)
 from quadrants.lang._weak_identity_cache import WeakIdentityCache
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.kernel_arguments import ArgMetadata
@@ -66,7 +69,10 @@ def _cached_collect_dataclass_paths_in_data_oriented(data_oriented_obj: DataOrie
 
 
 def collect_dataclass_schemas_in_data_oriented_args(
-    args: tuple[Any, ...], arg_metas: list[ArgMetadata], template_slots: list[int]
+    args: tuple[Any, ...],
+    arg_metas: list[ArgMetadata],
+    template_slots: list[int],
+    final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
 ) -> list[tuple[int, tuple[str, ...], type[RuntimeDataclassSchema]]]:
     """Collect inferred schemas for dataclasses reached through data-oriented arguments."""
     # Schemas for this launch, paired with argument indices and member paths.
@@ -81,7 +87,11 @@ def collect_dataclass_schemas_in_data_oriented_args(
             outermost_dataclass = get_member_at_path(data_oriented_obj, path)
             if not hasattr(type(outermost_dataclass), "__dataclass_fields__"):
                 raise TypeError("A data-oriented dataclass member must remain a dataclass between kernel calls.")
-            schema = cached_infer_dataclass_schema(outermost_dataclass, ".".join((arg_metas[index].name, *path)))
+            schema = cached_infer_dataclass_schema(
+                outermost_dataclass,
+                ".".join((arg_metas[index].name, *path)),
+                final_value_specialization_signature_by_value_id=final_value_specialization_signature_by_value_id,
+            )
             launch_arg_schemas.append((index, path, schema))
     return launch_arg_schemas
 

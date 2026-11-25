@@ -77,7 +77,9 @@ def build_nested_dataclass_specialization_signatures(
     final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None,
 ) -> tuple[tuple[int, tuple[str, ...], Any], ...]:
     """Collect nested dataclass schemas, update kernel metadata, and return their specialization signatures."""
-    launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(py_args, arg_metas, template_slot_locations)
+    launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(
+        py_args, arg_metas, template_slot_locations, final_value_specialization_signature_by_value_id
+    )
     if runtime_kernel is not None:
         runtime_kernel._launch_arg_schemas = launch_arg_schemas
         runtime_kernel._runtime_has_deferred |= any(
