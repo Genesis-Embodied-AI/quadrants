@@ -54,7 +54,7 @@ def test_callable_kernel_specialization_mapper():
 
 
 @test_utils.test()
-def test_callable_template_mapper_numpy():
+def test_callable_kernel_specialization_mapper_numpy():
     x = qd.field(qd.i32)
     y = qd.field(qd.f32)
 

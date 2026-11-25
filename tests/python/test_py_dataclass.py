@@ -1235,7 +1235,7 @@ def test_substruct_deep_nesting() -> None:
 
 @pytest.mark.parametrize("use_slots", [False, True])
 @test_utils.test()
-def test_template_mapper_cache(use_slots, monkeypatch):
+def test_kernel_specialization_mapper_cache(use_slots, monkeypatch):
     # Mock '_extract_arg' to track the number of (recursive) calls
     counter = 0
     _extract_arg_orig = qd.lang._kernel_specialization_mapper_hotpath._extract_arg
@@ -3560,7 +3560,7 @@ def test_final_and_non_final_fields_mix():
 @test_utils.test()
 def test_final_field_identical_values_share_compiled_kernel():
     """Kernel caching correctness: two ``SimConfig`` instances with the same Final-field value must reuse the same
-    compiled kernel. Two consecutive launches with equal Final values keep ``template_mapper.mapping`` size at 1; a
+    compiled kernel. Two consecutive launches with equal Final values keep ``mapper.mapping`` size at 1; a
     third launch with a different value grows it to 2. Guards against accidentally hashing the *instance* rather than
     the *value* in the specialization signature.
     """
