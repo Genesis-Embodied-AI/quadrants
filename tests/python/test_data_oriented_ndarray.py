@@ -200,7 +200,7 @@ def test_data_oriented_ndarray_reassign_same_shape():
 
 # ---------------------------------------------------------------------------
 # 7. Mutation cross-shape: reassign ndarray attribute to a *different-dtype* ndarray. The template-mapper specialization
-#    signature (in ``_kernel_specialization_mapper_hotpath.build_argument_specialization_signature``) returns
+#    signature (in ``_kernel_specialization_mapper_hotpath._build_argument_specialization_signature``) returns
 # ``weakref.ref(arg)`` for
 #    ``is_data_oriented(arg)``; it does NOT descend into ndarray children to compute a dtype/ndim-dependent
 #    specialization signature. So a reassignment to a different dtype on an unchanged instance id must still

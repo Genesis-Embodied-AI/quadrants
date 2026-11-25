@@ -63,7 +63,7 @@ class Ndarray:
 
     # PERF-CRITICAL: This class attribute lets hotpath code access ``arg._qd_layout`` directly instead of ``getattr(arg,
     # "_qd_layout", None)``. Direct attribute access is measurably faster on the per-kernel-arg path in
-    # _kernel_specialization_mapper_hotpath.build_argument_specialization_signature. Instance-level _qd_layout (set
+    # _kernel_specialization_mapper_hotpath._build_argument_specialization_signature. Instance-level _qd_layout (set
     # during layout-tagged
     # allocation) shadows
     # this default.
