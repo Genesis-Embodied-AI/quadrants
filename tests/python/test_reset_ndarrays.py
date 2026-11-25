@@ -1,5 +1,7 @@
+import dataclasses
 import gc
 import sys
+import weakref
 
 import pytest
 
@@ -89,3 +91,74 @@ def test_ndarray_reset() -> None:
     assert bar_param.arr is None
 
     assert a.shape is None
+
+
+@test_utils.test(arch=qd.cpu)
+def test_reset_releases_template_arguments() -> None:
+    """Check that reset releases cached template arguments and the kernel works after reinitialization."""
+
+    class Data:
+        def __init__(self, value: int) -> None:
+            self.field = qd.field(qd.i32, shape=())
+            self.field[None] = value
+
+    @qd.kernel
+    def read(data: qd.Template) -> qd.i32:
+        return data.field[None]
+
+    data = Data(3)
+    data_ref = weakref.ref(data)
+    field_ref = weakref.ref(data.field)
+    assert read(data) == 3
+    del data
+    qd.reset()
+    gc.collect()
+    assert data_ref() is None
+    assert field_ref() is None
+
+    qd.init(arch=qd.cpu)
+    assert read(Data(7)) == 7
+
+
+@test_utils.test(arch=qd.cpu)
+def test_reset_clears_nested_dataclass_launch_metadata() -> None:
+    """Check that reset clears nested dataclass launch metadata and reinitialization rebuilds it."""
+
+    @dataclasses.dataclass
+    class State:
+        count: int
+        values: qd.types.NDArray[qd.i32, 1]
+
+    @qd.data_oriented(template_primitives=False)
+    class Data:
+        def __init__(self, value: int) -> None:
+            values = qd.ndarray(qd.i32, shape=1)
+            values[0] = value
+            self.state = State(value, values)
+            self.offset = value
+
+    @qd.kernel
+    def read(data: qd.Template) -> qd.i32:
+        return data.state.count + data.state.values[0] + data.offset
+
+    data = Data(3)
+    assert read(data) == 9
+    kernel = read._primal
+    assert kernel.mapper.mapping
+    assert kernel._launch_infos_for_root_dataclasses_in_data_oriented_by_key
+    assert kernel._runtime_scalar_launch_infos_by_compiled_kernel_key
+
+    qd.reset()
+    assert not kernel.mapper.mapping
+    assert not kernel.used_py_dataclass_parameters_by_key_enforcing
+    assert not kernel._struct_ndarray_launch_info_by_key
+    assert not kernel._launch_infos_for_root_dataclasses_in_data_oriented_by_key
+    assert not kernel._runtime_scalar_launch_infos_by_compiled_kernel_key
+    assert kernel._mutable_nd_cached_key is None
+    assert not kernel._mutable_nd_cached_val
+
+    qd.init(arch=qd.cpu)
+    data = Data(7)
+    assert read(data) == 21
+    data.state.count = 11
+    assert read(data) == 25
