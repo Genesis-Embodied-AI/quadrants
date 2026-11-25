@@ -23,7 +23,6 @@
   "sparse"          : "Sparse computation",
   "llvm"            : "LLVM backend (CPU and CUDA)",
   "refactor"        : "Refactor",
-  "bug"             : "Bug fixes",
   "test"            : "Tests",
   "benchmark"       : "Benchmarking",
   "mesh"            : "MeshQuadrants",
