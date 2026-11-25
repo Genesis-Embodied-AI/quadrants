@@ -42,5 +42,17 @@
   "release"         : "Release",
   "build"           : "Build system",
   "rfc"             : "RFC",
-  "amdgpu"          : "AMDGPU backend"
+  "amdgpu"          : "AMDGPU backend",
+  "caching"         : "Kernel compilation and artifact caching",
+  "fastcache"       : "Source-level kernel caching",
+  "graph"           : "Kernel graphs and checkpoints",
+  "dataclass"       : "Dataclass arguments and member binding",
+  "matrix"          : "Matrix and Vector types",
+  "tensor"          : "Tensor types and layouts",
+  "field"           : "Field storage and initialization",
+  "ndarray"         : "Ndarray storage and operations",
+  "interop"         : "Interoperability with external libraries and devices",
+  "memory"          : "Memory allocation and management",
+  "linalg"          : "Linear algebra",
+  "atomics"         : "Atomic operations"
 }
