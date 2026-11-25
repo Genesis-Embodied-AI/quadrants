@@ -268,7 +268,7 @@ class Matrix(QuadrantsOperations):
         if len(arr) == 0:
             self.ndim = 0
             self.n, self.m = 0, 0
-            self.entries = np.array([])
+            self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
             self.is_host_access = False
         elif isinstance(arr[0], Matrix):
             raise Exception("cols/rows required when using list of vectors")
@@ -291,6 +291,15 @@ class Matrix(QuadrantsOperations):
                 self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
+        if self.is_host_access:
+            first_accessor = self.accessors[0][0] if self.ndim == 2 else self.accessors[0]
+            if isinstance(first_accessor, SNodeHostAccess):
+                self._dtype = first_accessor.accessor.dtype
+            else:
+                self._dtype = first_accessor.ndarr.dtype
+        else:
+            self._dtype = to_quadrants_type(self.entries.dtype)
+
         if self.n * self.m > 144:
             warning(
                 f"Quadrants matrices/vectors with {self.n}x{self.m} > 144 entries are not suggested."
@@ -307,14 +316,7 @@ class Matrix(QuadrantsOperations):
     @property
     def dtype(self) -> qd_python_core.DataTypeCxx:
         """Return the element compute dtype without reading element values or calling to_numpy()."""
-        if not self.is_host_access:
-            return to_quadrants_type(self.entries.dtype)
-
-        first_accessor = self.accessors[0][0] if self.ndim == 2 else self.accessors[0]
-        if isinstance(first_accessor, SNodeHostAccess):
-            return first_accessor.accessor.dtype
-
-        return first_accessor.ndarr.dtype
+        return self._dtype
 
     def get_shape(self):
         if self.ndim == 1:

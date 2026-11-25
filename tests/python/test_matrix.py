@@ -1463,3 +1463,17 @@ def test_quantized_matrix_dtype(quant_kind: str) -> None:
         bitpack.place(field.get_scalar_field(0, 0))
         qd.root.place(bitpack)
         assert field[None].dtype == expected
+
+
+def test_empty_matrix_dtype() -> None:
+    """Empty Matrix and Vector storage honors explicit and inferred dtypes."""
+    for matrix_type in (qd.Matrix, qd.Vector):
+        for values, dtype, expected, numpy_dtype in (
+            ([], qd.i32, qd.i32, np.int32),
+            ([], qd.f32, qd.f32, np.float32),
+            (np.array([], dtype=np.int16), None, qd.i16, np.int16),
+            ([], None, qd.f64, np.float64),
+        ):
+            value = matrix_type(values, dt=dtype)
+            assert value.dtype == expected
+            assert value.to_numpy().dtype == numpy_dtype

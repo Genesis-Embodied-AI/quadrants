@@ -106,4 +106,4 @@ matrix = qd.Matrix([[1, 2], [3, 4]], dt=qd.i32)
 print(matrix.dtype)  # i32
 ```
 
-The property also works on elements read from matrix/vector fields and ndarrays. Quantized fields return their compute type, such as `qd.i32` or `qd.f32`, rather than their packed storage type.
+The dtype is recorded when the matrix or vector is constructed. Changing element values preserves it. The property also works on elements read from matrix/vector fields and ndarrays. Quantized fields return their compute type, such as `qd.i32` or `qd.f32`, rather than their packed storage type.
