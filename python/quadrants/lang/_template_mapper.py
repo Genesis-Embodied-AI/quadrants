@@ -181,7 +181,8 @@ class TemplateMapper:
         # Exclude dataclasses beneath data-oriented arguments from this identity cache.
         # A nested dataclass member can change type while the containing argument keeps the same identity.
         # A cache hit would then skip schema inference and could select the wrong compiled kernel.
-        cache_disabled = cache_disabled or bool(launch_arg_schemas)
+        if launch_arg_schemas:
+            cache_disabled = True
         if runtime_kernel is not None:
             runtime_kernel._launch_arg_schemas = launch_arg_schemas
             runtime_kernel._runtime_has_deferred |= any(
