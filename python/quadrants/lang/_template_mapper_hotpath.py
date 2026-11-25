@@ -171,6 +171,7 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     paths = []
     _build_struct_nd_paths(arg, (), paths)
     try:
+        # FIXME: Store this cache separately instead of modifying the passed-in argument or using setattr.
         object.__setattr__(arg, "_qd_nd_paths", paths)
     except AttributeError:
         # No ``__dict__`` to stash in - degrade to per-class caching.
