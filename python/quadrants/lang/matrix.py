@@ -258,14 +258,14 @@ class Matrix(QuadrantsOperations):
     _is_matrix_class = True
     __array_priority__ = 1000
 
-    # Numeric matrices store values in entries; field/ndarray-backed matrices store descriptors in accessors.
+    # Numeric matrices store values in _entries; field/ndarray-backed matrices store descriptors in _accessors.
     def __init__(self, arr, dt=None):
         if not isinstance(arr, (list, tuple, np.ndarray)):
             raise QuadrantsTypeError("An Matrix/Vector can only be initialized with an array-like object")
         if len(arr) == 0:
             self.ndim = 0
             self.n, self.m = 0, 0
-            self.entries = np.array([])
+            self._entries = np.array([])
             self.is_host_access = False
         elif isinstance(arr[0], Matrix):
             raise Exception("cols/rows required when using list of vectors")
@@ -273,19 +273,19 @@ class Matrix(QuadrantsOperations):
             self.ndim = 2
             self.n, self.m = len(arr), len(arr[0])
             if isinstance(arr[0][0], (SNodeHostAccess, NdarrayHostAccess)):
-                self.accessors = arr
+                self._accessors = arr
                 self.is_host_access = True
             else:
-                self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
+                self._entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
         else:  # vector
             self.ndim = 1
             self.n, self.m = len(arr), 1
             if isinstance(arr[0], (SNodeHostAccess, NdarrayHostAccess)):
-                self.accessors = arr
+                self._accessors = arr
                 self.is_host_access = True
             else:
-                self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
+                self._entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
         if self.n * self.m > 144:
@@ -365,9 +365,9 @@ class Matrix(QuadrantsOperations):
             assert len(indices) in [1, 2]
             assert len(indices) == self.ndim, f"Expected {self.ndim} indices, got {len(indices)}"
             if self.ndim == 1:
-                self.entries[indices[0]] = item
+                self._entries[indices[0]] = item
             else:
-                self.entries[indices[0]][indices[1]] = item
+                self._entries[indices[0]][indices[1]] = item
 
     def _get_entry(self, indices):
         if not isinstance(indices, (list, tuple)):
@@ -400,23 +400,23 @@ class Matrix(QuadrantsOperations):
         if self.is_host_access:
             if self.ndim == 1:
                 for i in range(self.n):
-                    _write_host_access(self.accessors[i], value[i])
+                    _write_host_access(self._accessors[i], value[i])
             else:
                 for i in range(self.n):
                     for j in range(self.m):
-                        _write_host_access(self.accessors[i][j], value[i][j])
+                        _write_host_access(self._accessors[i][j], value[i][j])
         else:
             if self.ndim == 1:
                 for i in range(self.n):
-                    self.entries[i] = value[i]
+                    self._entries[i] = value[i]
             else:
                 for i in range(self.n):
                     for j in range(self.m):
-                        self.entries[i][j] = value[i][j]
+                        self._entries[i][j] = value[i][j]
 
     @property
     def _members(self):
-        return self.accessors if self.is_host_access else self.entries
+        return self._accessors if self.is_host_access else self._entries
 
     def to_list(self):
         """Return this matrix as a 1D `list`.
@@ -426,10 +426,10 @@ class Matrix(QuadrantsOperations):
         """
         if self.is_host_access:
             if self.ndim == 1:
-                return [_read_host_access(self.accessors[i]) for i in range(self.n)]
+                return [_read_host_access(self._accessors[i]) for i in range(self.n)]
             assert self.ndim == 2
-            return [[_read_host_access(self.accessors[i][j]) for j in range(self.m)] for i in range(self.n)]
-        return self.entries.tolist()
+            return [[_read_host_access(self._accessors[i][j]) for j in range(self.m)] for i in range(self.n)]
+        return self._entries.tolist()
 
     @quadrants_scope
     def cast(self, dtype):
@@ -728,7 +728,7 @@ class Matrix(QuadrantsOperations):
         """
         if self.is_host_access:
             return np.array(self.to_list())
-        return self.entries
+        return self._entries
 
     @quadrants_scope
     def __qd_repr__(self) -> NoReturn:
