@@ -4560,7 +4560,7 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
 
 
 @test_utils.test()
-def test_final_plan_cache_keyed_by_type_identity():
+def test_validated_final_field_names_cache_keyed_by_type_identity():
     """Distinct dataclasses must not share cached Final declarations, even when their metaclass makes them equal."""
     import dataclasses as dcs
     from typing import Final
