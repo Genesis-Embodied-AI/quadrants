@@ -33,6 +33,8 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
     )
 
 
+# FIXME: Cache enum validation and specialization signatures under the documented immutability assumption.
+# Benchmark this before migrating frequently used Genesis Config objects to dataclass Final fields.
 def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     """Validate a Final value and build its specialization signature.
 
