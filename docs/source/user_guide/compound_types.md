@@ -166,7 +166,7 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Frozen vs non-frozen
 
-A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch.
+A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Quadrants can cache inferred types and launch arguments for frozen containers when their members retain the same types and references. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch.
 
 **Important.** Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested dataclass and data-oriented objects fixed. For example, if `state.grid` holds a dataclass, assigning `state.grid = another_grid` between launches is unsupported and can give incorrect results. You can pass a different `state` instance on the next call, or update an ordinary runtime scalar such as `state.grid.n` on a mutable dataclass.
 
