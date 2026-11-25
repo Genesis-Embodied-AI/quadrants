@@ -140,7 +140,8 @@ def prepare(directory, event, run_id, attempt):
             requested = event["inputs"]["genesis_ref"]
             genesis_sha = github(f"repos/{GENESIS}/commits/{quote(requested, safe='')}")["sha"]
             runs = pages(
-                f"repos/{REPOSITORY}/actions/workflows/manylinux_wheel.yml/runs?head_sha={main_sha}", "workflow_runs"
+                f"repos/{REPOSITORY}/actions/workflows/manylinux_wheel.yml/runs?branch=main&status=success",
+                "workflow_runs",
             )
             wheel_run = next(
                 (
@@ -153,11 +154,16 @@ def prepare(directory, event, run_id, attempt):
                 None,
             )
             if wheel_run is None:
-                raise ValueError(f"Build the Manylinux wheel on main ({main_sha}) before bootstrapping.")
+                raise ValueError("Build a successful Manylinux wheel on main before bootstrapping.")
+            # Main can advance while its next wheel is building; pin the latest successful build instead.
+            selected_sha = wheel_run["head_sha"]
+            comparison = github(f"repos/{REPOSITORY}/compare/{selected_sha}...{main_sha}")
+            if comparison["status"] not in ("ahead", "identical"):
+                raise ValueError("Bootstrap wheel commit must belong to Quadrants main history.")
             manifest = dict(
                 genesis_ref=requested,
                 genesis_sha=genesis_sha,
-                main_cutoff=main_sha,
+                main_cutoff=selected_sha,
                 pr=None,
                 bootstrap=True,
                 activation=str(run_id),
@@ -172,7 +178,7 @@ def prepare(directory, event, run_id, attempt):
                     "merge_base_commit"
                 ]["sha"]
             )
-        if manifest["bootstrap"] and manifest["wheel"]["commit"] != main_sha:
+        if manifest["bootstrap"] and manifest["wheel"]["commit"] != manifest["main_cutoff"]:
             raise ValueError("Bootstrap wheel must represent the selected main commit.")
     manifest["run_id"] = run_id
     manifest["attempt"] = attempt

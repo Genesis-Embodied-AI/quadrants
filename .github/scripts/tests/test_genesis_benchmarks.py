@@ -332,23 +332,63 @@ def test_prepare_anchors_cutoff_to_tested_wheel_base(manifest, tmp_path, synthet
     assert saved["wheel"]["commit"] == commit
 
 
-def test_bootstrap_resolves_the_requested_genesis_revision(tmp_path):
-    wheel_run = dict(head_branch="main", event="push", conclusion="success", head_sha="main")
-    wheel = dict(commit="main", artifact_id=30, run_id=20, base_commit=None)
+@pytest.mark.parametrize("selected_sha", ["main", "older-main"])
+def test_bootstrap_resolves_genesis_and_uses_latest_successful_main_wheel(tmp_path, selected_sha):
+    wheel_run = dict(head_branch="main", event="push", conclusion="success", head_sha=selected_sha)
+    wheel = dict(commit=selected_sha, artifact_id=30, run_id=20, base_commit=None)
+    runs = [
+        dict(wheel_run, conclusion=None, head_sha="main"),
+        dict(wheel_run, conclusion="failure", head_sha="main"),
+        dict(wheel_run, head_branch="feature"),
+        dict(wheel_run, event="pull_request"),
+        wheel_run,
+        dict(wheel_run, head_sha="even-older-main"),
+    ]
 
     def request(endpoint):
         if endpoint.endswith("/commits/main"):
             return dict(sha="main")
         if endpoint.endswith("/commits/release"):
             return dict(sha="selected-genesis")
-        raise AssertionError(f"Unexpected GitHub request: {endpoint}")
+        assert endpoint.endswith(f"/compare/{selected_sha}...main")
+        return dict(status="identical" if selected_sha == "main" else "ahead")
 
     with (
-        patch.object(benchmarks, "pages", side_effect=[iter([]), iter([wheel_run])]),
+        patch.object(benchmarks, "pages", side_effect=[iter([]), iter(runs)]) as pages,
         patch.object(benchmarks, "github", side_effect=request),
-        patch.object(benchmarks, "validate_wheel", return_value=wheel),
+        patch.object(benchmarks, "validate_wheel", return_value=wheel) as validate,
         patch.dict(os.environ, GITHUB_OUTPUT=str(tmp_path / "outputs")),
     ):
         benchmarks.prepare(tmp_path, dict(inputs=dict(genesis_ref="release")), 100, 1)
+        assert pages.call_args.args == (
+            f"repos/{benchmarks.REPOSITORY}/actions/workflows/manylinux_wheel.yml/runs?branch=main&status=success",
+            "workflow_runs",
+        )
+        validate.assert_called_once_with(wheel_run, tmp_path / "wheel")
     saved = json.loads((tmp_path / "manifest.json").read_text())
     assert saved["genesis_sha"] == "selected-genesis"
+    assert saved["main_cutoff"] == selected_sha
+    assert saved["head_sha"] == selected_sha
+    assert saved["wheel"]["commit"] == selected_sha
+
+
+@pytest.mark.parametrize("status", ["behind", "diverged"])
+def test_bootstrap_rejects_wheel_outside_main_history(tmp_path, status):
+    run = dict(head_branch="main", event="push", conclusion="success", head_sha="other")
+    with (
+        patch.object(benchmarks, "pages", side_effect=[iter([]), iter([run])]),
+        patch.object(benchmarks, "github", side_effect=[dict(sha="main"), dict(sha="genesis"), dict(status=status)]),
+        patch.object(benchmarks, "validate_wheel") as validate,
+    ):
+        with pytest.raises(ValueError, match="must belong to Quadrants main history"):
+            benchmarks.prepare(tmp_path, dict(inputs=dict(genesis_ref="release")), 100, 1)
+        validate.assert_not_called()
+
+
+def test_bootstrap_requires_a_successful_main_wheel(tmp_path):
+    with (
+        patch.object(benchmarks, "pages", side_effect=[iter([]), iter([])]),
+        patch.object(benchmarks, "github", side_effect=[dict(sha="main"), dict(sha="genesis")]),
+    ):
+        with pytest.raises(ValueError, match="Build a successful Manylinux wheel"):
+            benchmarks.prepare(tmp_path, dict(inputs=dict(genesis_ref="release")), 100, 1)
