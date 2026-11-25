@@ -208,6 +208,8 @@ class TemplateMapper:
             count = self.mapping[key] = len(self.mapping)
 
         # Skip the store too when disabled, so the read above always misses and every launch revalidates.
+        # Nested dataclass member types can change without changing the data-oriented argument's identity.
+        # An identity-cache hit would skip schema inference and could select the wrong compiled kernel.
         if not cache_disabled and not launch_arg_schemas:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.
