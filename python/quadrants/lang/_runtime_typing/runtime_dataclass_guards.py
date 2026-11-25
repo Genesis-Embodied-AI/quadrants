@@ -32,7 +32,7 @@ class SchemaNeedingMemberChecks:
 
     def __init__(
         self,
-        value: "DataclassInstance",
+        dataclass_instance: "DataclassInstance",
         schema: "type[RuntimeDataclassSchema]",
         field_names_and_final: Sequence[tuple[str, bool]],
         member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
@@ -47,7 +47,7 @@ class SchemaNeedingMemberChecks:
                 continue
             if isinstance(member_type, DeferredMemberType):
                 continue
-            child = getattr(value, name)
+            child = getattr(dataclass_instance, name)
             if isinstance(child, Tensor):
                 continue
             if hasattr(member_type, "_qd_underlying_dataclass"):
