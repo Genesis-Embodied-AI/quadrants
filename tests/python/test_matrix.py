@@ -1433,6 +1433,8 @@ def test_matrix_dtype_without_value_reads(storage: str, monkeypatch: pytest.Monk
             else:
                 backing = getattr(matrix_type, storage)(*dimensions, dtype=dtype, shape=1)
                 value = backing[0]
+            assert hasattr(value, "entries") == (storage == "python")
+            assert hasattr(value, "accessors") == (storage != "python")
             assert value.dtype == dtype
             value.fill(3)
             assert value.dtype == dtype

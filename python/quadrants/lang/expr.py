@@ -163,7 +163,7 @@ def make_expr_group(*exprs):
         elif isinstance(exprs[0], Matrix):
             mat = exprs[0]
             assert mat.m == 1
-            exprs = mat.entries
+            exprs = mat._members
     expr_group = _qd_core.ExprGroup()
     for i in exprs:
         flattened = _get_flattened_ptrs(i)
