@@ -7,7 +7,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._runtime_typing.dataclass_schemas import (
-    _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path,
+    _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path,
     cached_infer_dataclass_schema,
     infer_member_type,
 )
@@ -33,10 +33,10 @@ def test_schema_cache_does_not_modify_instances(slots: bool, unsafe_hash: bool) 
     assert first.__dataclass_params__.unsafe_hash is False
     assert cached_infer_dataclass_schema(state, "state") is first
     if slots:
-        assert _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(state) is None
+        assert _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(state) is None
     else:
         assert vars(state) == before
-        assert _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(state) is not None
+        assert _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(state) is not None
     assert not hasattr(state, "_qd_runtime_schemas")
     assert not hasattr(state, "_qd_runtime_guarded_schemas")
 
@@ -58,13 +58,13 @@ def test_guard_cache_does_not_retain_parent_through_child() -> None:
     schema = cached_infer_dataclass_schema(state, "state")
     assert cached_infer_dataclass_schema(state, "state") is schema
     assert vars(state) == before
-    assert _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(state) is not None
+    assert _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(state) is not None
     key_id = id(state)
     ref = weakref.ref(state)
     del state, child, before
     gc.collect()
     assert ref() is None
-    assert key_id not in _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path._entries
+    assert key_id not in _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path._entries
 
 
 @test_utils.test(arch=qd.cpu)
@@ -157,7 +157,7 @@ def test_array_members_do_not_need_schema_checks(backend: str) -> None:
 
     guarded = State(array, Mutable(1))
     cached_infer_dataclass_schema(guarded, "state")
-    entries = _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(guarded)
+    entries = _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(guarded)
     assert entries is not None
     entry = next(iter(entries.values()))
     assert isinstance(entry, SchemaNeedingMemberChecks)
@@ -191,8 +191,26 @@ def test_matrix_schema_uses_recorded_dtype(monkeypatch: pytest.MonkeyPatch) -> N
 
         guarded = State(matrix, Mutable(1))
         cached_infer_dataclass_schema(guarded, "state")
-        entries = _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(guarded)
+        entries = _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(guarded)
         assert entries is not None
         entry = next(iter(entries.values()))
         assert isinstance(entry, SchemaNeedingMemberChecks)
         assert [name for name, _ in entry.member_guards] == ["other"]
+
+
+@test_utils.test(arch=qd.cpu, debug=False)
+def test_instance_schema_cache_separates_debug_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same instance has separate cache entries for different debug settings."""
+    from quadrants.lang import impl
+
+    @dataclass(frozen=True)
+    class State:
+        value: int
+
+    state = State(1)
+    cached_infer_dataclass_schema(state, "state")
+    monkeypatch.setattr(impl.current_cfg(), "debug", True)
+    cached_infer_dataclass_schema(state, "state")
+    entries = _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(state)
+    assert entries is not None
+    assert {debug for _, _, debug, _ in entries} == {False, True}

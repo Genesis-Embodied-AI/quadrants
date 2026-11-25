@@ -103,8 +103,8 @@ InferredMemberType: TypeAlias = (
     type | DataTypeCxx | ndarray_type.NdarrayType | buffer_view_type.BufferViewType | MatrixType | StructType
 )
 
-# Numeric-default identities and mutable-ancestor context.
-InferenceContextKey: TypeAlias = tuple[int, int, str | None]
+# Integer and float default identities, debug setting, and mutable-ancestor path.
+InferenceContextKey: TypeAlias = tuple[int, int, bool, str | None]
 
 
 class DeferredMemberType(NamedTuple):

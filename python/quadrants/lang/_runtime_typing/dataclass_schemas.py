@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 
 
 # Schema lookup uses three cache layers:
-# - Dataclass instance, then numeric defaults and ancestor path -> schema or SchemaNeedingMemberChecks.
+# - Dataclass instance, then compiler settings and ancestor path -> schema or SchemaNeedingMemberChecks.
 # - Dataclass type -> field names and Final flags.
 # - Dataclass type and inferred member types -> schema.
 #
@@ -100,8 +100,8 @@ if TYPE_CHECKING:
 #
 # Instance-cache writes require weak-reference support; otherwise return the schema without storing it.
 #
-# Per-instance schemas, separated by numeric defaults and ancestor validation context; keys are held weakly.
-_schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path: WeakIdentityCache[
+# Per-instance schemas, separated by compiler settings and ancestor validation context; keys are held weakly.
+_schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path: WeakIdentityCache[
     dict[InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks]
 ] = WeakIdentityCache()
 
@@ -289,7 +289,7 @@ def _infer_dataclass_runtime_member_types(
         elif is_runtime_dataclass_schema(member_type):
             has_deferred_error |= member_type._qd_has_deferred_errors
         member_types.append(member_type)
-    # Deferred descriptions depend on debug mode. Re-infer them each launch instead of caching them by instance.
+    # Deferred-error schemas still bypass per-instance caching.
     needs_member_check |= has_deferred_error
     return member_types, needs_member_check, has_deferred_error
 
@@ -311,15 +311,19 @@ def cached_infer_dataclass_schema(
     ancestor_ids = ancestor_ids | {id(dataclass_instance)}
     dataclass_type = type(dataclass_instance)
     runtime = impl.get_runtime()
-    schema_by_numeric_defaults_and_ancestor_path = (
-        _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path.get(dataclass_instance)
+    schema_by_compiler_settings_and_ancestor_path = (
+        _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(dataclass_instance)
     )
-    # The same instance can need different schemas under different numeric defaults or non-frozen ancestor paths.
-    # These affect member types and Final validation, so each instance has a dictionary keyed by inference context.
-    numeric_defaults_and_ancestor_path = (id(runtime.default_ip), id(runtime.default_fp), non_frozen_ancestor_path)
+    # Numeric defaults affect member types, debug affects diagnostics, and ancestor paths affect Final validation.
+    compiler_settings_and_ancestor_path = (
+        id(runtime.default_ip),
+        id(runtime.default_fp),
+        impl.current_cfg().debug,
+        non_frozen_ancestor_path,
+    )
     cached_schema_entry = (
-        schema_by_numeric_defaults_and_ancestor_path.get(numeric_defaults_and_ancestor_path)
-        if schema_by_numeric_defaults_and_ancestor_path is not None
+        schema_by_compiler_settings_and_ancestor_path.get(compiler_settings_and_ancestor_path)
+        if schema_by_compiler_settings_and_ancestor_path is not None
         else None
     )
     if cached_schema_entry is not None and not isinstance(cached_schema_entry, SchemaNeedingMemberChecks):
@@ -367,17 +371,17 @@ def cached_infer_dataclass_schema(
         and not has_final_fields
         and non_frozen_ancestor_path is None
     ):
-        if schema_by_numeric_defaults_and_ancestor_path is None:
-            schema_by_numeric_defaults_and_ancestor_path = {}
+        if schema_by_compiler_settings_and_ancestor_path is None:
+            schema_by_compiler_settings_and_ancestor_path = {}
             try:
-                _schema_by_dataclass_instance_then_numeric_defaults_and_ancestor_path[dataclass_instance] = (
-                    schema_by_numeric_defaults_and_ancestor_path
+                _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path[dataclass_instance] = (
+                    schema_by_compiler_settings_and_ancestor_path
                 )
             except TypeError:
                 # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
                 return schema
 
-        schema_by_numeric_defaults_and_ancestor_path[numeric_defaults_and_ancestor_path] = (
+        schema_by_compiler_settings_and_ancestor_path[compiler_settings_and_ancestor_path] = (
             schema
             if not needs_member_check
             else SchemaNeedingMemberChecks(dataclass_instance, schema, field_names_and_final, member_types)
