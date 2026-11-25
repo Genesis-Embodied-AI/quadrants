@@ -166,9 +166,16 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 ### Frozen vs non-frozen
 
-A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch. `unsafe_hash=True` alone does not enable these caches.
+A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments. Frozen containers with stable members enable cached type resolution and launch arguments. A frozen outer container does not freeze its children: if a nested dataclass is mutable, Quadrants re-reads its members on each launch.
 
 **Important.** Once a dataclass or `@qd.data_oriented` object has been used in a kernel call, keep its references to nested dataclass and data-oriented objects fixed. For example, if `state.grid` holds a dataclass, assigning `state.grid = another_grid` between launches is unsupported and can give incorrect results. You can pass a different `state` instance on the next call, or update an ordinary runtime scalar such as `state.grid.n` on a mutable dataclass.
+
+When these objects are used as dataclass members, Quadrants assumes:
+
+- **Tensor subclasses:** the backing object and its type remain fixed; element values may change.
+- **Matrix/Vector:** shape and dtype remain fixed; element values may change.
+- **Declared Structs:** the declared type remains fixed; member values may change.
+- **`unsafe_hash=True`:** the caller preserves frozen-style bindings: do not reassign fields after first use in a kernel.
 
 ### Container alias cache
 
@@ -242,7 +249,7 @@ Semantics of a `Final` or `Final[T]` field:
 
 Restrictions:
 
-- **Every class on the path to the field must be frozen** (`frozen=True`, or `unsafe_hash=True` if you must keep one mutable). A baked value must not be reassignable, so a non-frozen `@dataclass` is rejected both when it declares a `Final` field itself and when it merely *holds* another dataclass that has one - rebinding that inner object would change a baked value without recompiling. `unsafe_hash=True` does **not** snapshot the instance: a `Final`-bearing instance is re-read on every launch (Quadrants deliberately skips its per-instance caches so the `Final`-value checks re-run), so a later reassignment is *not* ignored - changing a `Final` field selects a different compiled kernel, and changing an ordinary field supplies its new runtime value. Because each distinct `Final` value compiles a separate kernel, treat `Final` fields as fixed and reserve `unsafe_hash` for mutating the ordinary ones.
+- **Every class on the path to the field must be frozen** (`frozen=True`, or `unsafe_hash=True` with the caller responsible for never reassigning fields). Replacing a containing dataclass could change a baked constant, so mutable ancestors are also rejected.
 - **The arriving value must be a supported constant**: an exact built-in `bool`, `int`, `float`, `str`, or a supported member of an `enum.Enum` subclass. Custom non-enum scalar subclasses and NumPy scalars are rejected. Convert NumPy scalars to the corresponding built-in Python type explicitly. The optional inner annotation is ignored. Arrays, `qd.dataclass` structs, [`qd.Tensor`](tensor.md), nested dataclasses and arbitrary objects are rejected. To make a nested dataclass's leaves compile-time, mark those leaf fields `Final` rather than the nested field itself.
 - **An `enum` baked this way must be *plain*: state-free, behavior-free and scalar-valued.** Quadrants keys a baked member on its class plus its name/value, so it rejects (at first launch) any enum that carries something a kernel could additionally observe but the key cannot capture: per-member state (attributes set in `__init__`, or a populated `__slots__` slot - e.g. `config.mode.unit`), user-defined methods, properties, class variables or overridden operators on the class (e.g. `config.mode.label`, a custom `==`), or a member `value` that is not itself a bakeable scalar. Plain `Enum` / `IntEnum` / `IntFlag` members (including composites) are fine. A locally-defined or otherwise dynamically-recreated enum class is still accepted, but it is distinguished only within a single process, so it will not reuse another process's on-disk cached kernel; define enums at module scope if you want that cross-process reuse.
 - **An arriving floating-point Final value requires the [`raise_on_templated_floats`](init_options.md#raise_on_templated_floats) `qd.init` option to be off** (its default). That option makes Quadrants reject `float` values that drive kernel specialization, so an arriving float is rejected when the option is enabled, including under bare `Final` or `Final[int]`.
