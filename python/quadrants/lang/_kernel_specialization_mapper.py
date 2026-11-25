@@ -11,10 +11,10 @@ from quadrants.types import ndarray_type
 from .. import _warnings
 from ._container_aliases import cached_get_container_alias_key
 from ._kernel_specialization_mapper_hotpath import (
-    _extract_arg,
     _primitive_types,
     _struct_nd_paths_for,
     annotation_has_final_subtree,
+    build_argument_specialization_signature,
 )
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
@@ -67,14 +67,17 @@ class KernelSpecializationMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
-        # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
+    def build_argument_specialization_signature(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+        # Optional ndarray + None gets its own key: build_argument_specialization_signature's NdarrayType branch reads
+        # .shape and raises on None.
         return tuple(
             [
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                    else build_argument_specialization_signature(
+                        raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name
+                    )
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
@@ -133,7 +136,8 @@ class KernelSpecializationMapper:
                 nd_ids.append(id(v))
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
-        # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip ``extract()`` and
+        # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip
+        # ``build_argument_specialization_signature()`` and
         # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
@@ -150,7 +154,7 @@ class KernelSpecializationMapper:
                 return self._mapping_cache[args_hash]
 
         alias_key = cached_get_container_alias_key(args)
-        key = self.extract(raise_on_templated_floats, args) + (alias_key,)
+        key = self.build_argument_specialization_signature(raise_on_templated_floats, args) + (alias_key,)
         try:
             count = self.mapping[key]
         except KeyError:

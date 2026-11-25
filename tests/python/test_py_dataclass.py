@@ -1236,16 +1236,21 @@ def test_substruct_deep_nesting() -> None:
 @pytest.mark.parametrize("use_slots", [False, True])
 @test_utils.test()
 def test_kernel_specialization_mapper_cache(use_slots, monkeypatch):
-    # Mock '_extract_arg' to track the number of (recursive) calls
+    # Mock 'build_argument_specialization_signature' to track the number of (recursive) calls
     counter = 0
-    _extract_arg_orig = qd.lang._kernel_specialization_mapper_hotpath._extract_arg
+    build_argument_specialization_signature_orig = (
+        qd.lang._kernel_specialization_mapper_hotpath.build_argument_specialization_signature
+    )
 
-    def _extract_arg(*args, **kwargs):
+    def build_argument_specialization_signature(*args, **kwargs):
         nonlocal counter
         counter += 1
-        return _extract_arg_orig(*args, **kwargs)
+        return build_argument_specialization_signature_orig(*args, **kwargs)
 
-    monkeypatch.setattr("quadrants.lang._kernel_specialization_mapper_hotpath._extract_arg", _extract_arg)
+    monkeypatch.setattr(
+        "quadrants.lang._kernel_specialization_mapper_hotpath.build_argument_specialization_signature",
+        build_argument_specialization_signature,
+    )
 
     @dataclass(frozen=True, slots=use_slots)
     class MyStruct:
@@ -4004,7 +4009,8 @@ def test_final_float_field_honors_raise_on_templated_floats():
     the same way a ``qd.Template`` float does.
 
     Note this is deliberately *stricter* than the ``@qd.data_oriented`` pattern ``Final`` replaces: a float member of
-    a data_oriented template arg currently bypasses the guard, because ``_extract_arg``'s data_oriented branch returns
+    a data_oriented template arg currently bypasses the guard, because ``build_argument_specialization_signature``'s
+    data_oriented branch returns
     ``weakref.ref(arg)`` before reaching the float check. That gap is pre-existing and out of scope here; the point of
     this test is that the new annotation does not inherit it."""
     from typing import Final

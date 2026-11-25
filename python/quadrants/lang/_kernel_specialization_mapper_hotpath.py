@@ -1,7 +1,8 @@
 # pyright: reportAttributeAccessIssue=false
 
 """
-This function '_extract_arg' is called so often during physics simulation with Genesis that it becomes a major
+This function 'build_argument_specialization_signature' is called so often during physics simulation with Genesis that
+it becomes a major
 bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M
 FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us (microseconds) but
 also ns (nanoseconds). This requires special optimization technics, to name a few:
@@ -204,7 +205,7 @@ def chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
 def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
     reachable from ``arg``. Used by the template-mapper to refine the specialization signature for ``@qd.data_oriented``
-    args holding ndarrays - see the data_oriented branch in ``_extract_arg``.
+    args holding ndarrays - see the data_oriented branch in ``build_argument_specialization_signature``.
     """
     # A cached path's leaf can stop being an ``Ndarray`` mid-lifetime (a ``qd.Tensor`` impl swapped for a
     # ``MatrixField``), hence the skip below rather than reading Ndarray-only accessors off it.
@@ -225,7 +226,9 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
         out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
-def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
+def build_argument_specialization_signature(
+    raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str
+) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
     # ``getattr``, so a wrapper stored as a struct field arrives here un-stripped with its declared annotation (e.g.
@@ -252,7 +255,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         arg_type = type(arg)
         if issubclass(arg_type, (Ndarray, AnyArray)) or _is_external_array(arg):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
-                _extract_arg(
+                build_argument_specialization_signature(
                     raise_on_templated_floats,
                     arg,
                     _TENSOR_T_NDARRAY_ANNOTATION,
@@ -263,7 +266,9 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # so its cache entry is distinct from the ndarray branch above.
         annotation = template
         annotation_type = type(template)
-        return (_TENSOR_T_FIELD_MARKER,) + (_extract_arg(raise_on_templated_floats, arg, template, arg_name),)
+        return (_TENSOR_T_FIELD_MARKER,) + (
+            build_argument_specialization_signature(raise_on_templated_floats, arg, template, arg_name),
+        )
     arg_type = type(arg)
     if annotation is template or annotation_type is template:
         if arg_type is SNode:
@@ -273,7 +278,12 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if arg_type is _ExprCxx:
             return arg.get_underlying_ptr_address()
         if issubclass(arg_type, tuple):  # Handle all tuple-based containers, incl. NamedTuple
-            return tuple([_extract_arg(raise_on_templated_floats, item, annotation, arg_name) for item in arg])
+            return tuple(
+                [
+                    build_argument_specialization_signature(raise_on_templated_floats, item, annotation, arg_name)
+                    for item in arg
+                ]
+            )
         if issubclass(arg_type, Ndarray):
             raise QuadrantsRuntimeTypeError(
                 "Ndarray shouldn't be passed in via `qd.template()`, please annotate your kernel using `qd.types.ndarray(...)` instead"
@@ -418,7 +428,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                 _key_hit = None
             if _key_hit is not None and _key_hit[0] is annotation:
                 return _key_hit[1]
-        # ``Final[T]`` fields drive the key by *value*; other fields keep the recursive ``_extract_arg``. PERF: with no
+        # ``Final[T]`` fields drive the key by *value*; other fields keep the recursive
+        # ``build_argument_specialization_signature``. PERF: with no
         # Final fields (the common case) we take the original comprehension verbatim.
         final_names = final_field_names(annotation)
         if final_names:
@@ -444,7 +455,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     key_parts.append(final_scalar_key(field_value, live=True))
                 else:
                     key_parts.append(
-                        _extract_arg(
+                        build_argument_specialization_signature(
                             raise_on_templated_floats,
                             field_value,
                             field.type,
@@ -455,7 +466,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         else:
             key = tuple(
                 [
-                    _extract_arg(
+                    build_argument_specialization_signature(
                         raise_on_templated_floats,
                         getattr(arg, field.name),
                         field.type,
