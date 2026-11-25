@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
+from quadrants import _warnings
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang import impl
@@ -320,8 +321,9 @@ def _store_schema_in_instance_cache(
             _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path[dataclass_instance] = (
                 schema_by_compiler_settings_and_ancestor_path
             )
-        except TypeError:
+        except TypeError as error:
             # Slotted dataclasses may lack weak-reference support; infer without an instance cache.
+            _warnings.warn_uncacheable_weakref(error)
             return
 
     schema_by_compiler_settings_and_ancestor_path[compiler_settings_and_ancestor_path] = (
