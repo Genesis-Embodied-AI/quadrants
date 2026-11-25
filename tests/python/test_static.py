@@ -57,7 +57,7 @@ def test_static_if_error():
         else:
             x[0] = 0
 
-    with pytest.raises(qd.QuadrantsCompilationError, match="must be compile-time constants"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="must be compile-time constants"):
         static(42)
 
 

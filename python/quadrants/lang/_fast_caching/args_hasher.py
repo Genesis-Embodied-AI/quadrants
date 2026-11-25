@@ -11,6 +11,7 @@ from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.lang._container_aliases import get_container_alias_key
+from quadrants.types import primitive_types
 from quadrants.types.annotations import Template
 
 from .._final.final_constant_values import final_scalar_key
@@ -40,8 +41,6 @@ g_hashing_time = 0
 g_repr_time = 0
 g_num_ignored_calls = 0
 
-
-FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
 _DC_REPR_NONE = object()
 
@@ -276,7 +275,7 @@ def dataclass_to_repr(
             raise_on_templated_floats,
             index_and_path + (field.name,),
             child_value,
-            arg_meta=None,
+            arg_meta=ArgMetadata(field.type, field.name),
             pruning_paths=pruning_paths,
             parent_flat=child_flat,
         )
@@ -289,10 +288,9 @@ def dataclass_to_repr(
                 except AttributeError:
                     pass
             return _FAIL_FASTCACHE
-        full_repr = f"{field.name}: ({_repr})"
-        if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
-            full_repr += f" = {child_value}"
-        repr_l.append(full_repr)
+        if id(field.type) in primitive_types.type_ids:
+            _repr = f"{field.type}:{_repr}"
+        repr_l.append(f"{field.name}: ({_repr})")
     result = "[" + ",".join(repr_l) + "]"
     if cacheable:
         try:

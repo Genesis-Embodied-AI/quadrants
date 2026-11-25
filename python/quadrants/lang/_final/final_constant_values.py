@@ -1,4 +1,4 @@
-"""Validate Final constant values and construct their specialization keys."""
+"""Validate Final constant values and construct their specialization signatures."""
 
 import enum
 from typing import Any
@@ -29,7 +29,7 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
 
 
 def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
-    """Validate a Final value and build its specialization key.
+    """Validate a Final value and build its specialization signature.
 
     Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
     its integer value. Float keys preserve exact bits, including signed zero and NaN payloads.

@@ -190,7 +190,7 @@ def test_frozen_dc_unwrapped_cache_populated():
 
 
 # ---------------------------------------------------------------------------
-# Template-key cache: verify _qd_spec_key is cached per annotated type (covariant reuse).
+# Template-key cache: verify _qd_specialization_signature is cached per annotated type (covariant reuse).
 # ---------------------------------------------------------------------------
 
 
@@ -222,15 +222,18 @@ def test_frozen_dc_template_key_cache_populated():
 
     sub = Sub(x1=qd.ndarray(qd.i32, shape=(4,)), x2=qd.ndarray(qd.f32, shape=(2, 2)))
 
-    assert not hasattr(sub, "_qd_spec_key")
+    assert not hasattr(sub, "_qd_specialization_signature")
     use1(sub)
-    assert id(Base1) in sub._qd_spec_key
+    assert id(Base1) in sub._qd_specialization_signature
     use2(sub)
-    assert id(Base1) in sub._qd_spec_key and id(Base2) in sub._qd_spec_key
-    assert sub._qd_spec_key[id(Base1)][0] is Base1 and sub._qd_spec_key[id(Base2)][0] is Base2
+    assert id(Base1) in sub._qd_specialization_signature and id(Base2) in sub._qd_specialization_signature
+    assert (
+        sub._qd_specialization_signature[id(Base1)][0] is Base1
+        and sub._qd_specialization_signature[id(Base2)][0] is Base2
+    )
 
     # Distinct field sets (i32/1D vs f32/2D) must yield distinct keys, i.e. neither annotation reused the other's.
-    assert sub._qd_spec_key[id(Base1)][1] != sub._qd_spec_key[id(Base2)][1]
+    assert sub._qd_specialization_signature[id(Base1)][1] != sub._qd_specialization_signature[id(Base2)][1]
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +291,7 @@ def test_frozen_dc_caches_identity_keyed_against_metaclass_eq():
     """Two distinct ancestor dataclasses whose metaclass makes them compare *and* hash equal must not collide in the
     per-annotation caches: a class-keyed dict would serve one ancestor's cached view for the other, but ``id()`` keying
     with an ``is`` guard keeps them separate. Exercised on ``_get_frozen_dc_unwrapped`` (``_qd_dc_unwrapped`` and
-    ``_qd_all_field``); ``_qd_spec_key`` uses identical keying."""
+    ``_qd_all_field``); ``_qd_specialization_signature`` uses identical keying."""
     from quadrants.lang._func_base import _get_frozen_dc_unwrapped
 
     class EqMeta(type):

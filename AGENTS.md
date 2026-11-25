@@ -2,6 +2,10 @@
 
 Instructions for AI coding agents and AI code-review agents working in this repository.
 
+## Follow the pull request template
+
+Before creating or updating a pull request, read `.github/pull_request_template.md` and follow its instructions for the title and description. Before submitting, compare the final title and body against the template. Apply this even when using CLI commands or APIs.
+
 ## Minimize contact area between new and existing code
 
 In order to reduce the risk of changes, changes should minimize the "contact area" between new code and existing code where possible. This applies especially to new and experimental features.
