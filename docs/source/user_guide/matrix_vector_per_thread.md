@@ -96,3 +96,14 @@ def mat_vec() -> None:
 
 - `qd.Matrix.diag(dim, val)` — create a diagonal matrix
 - `a.outer_product(b)` — outer product of two vectors
+
+## Reading a matrix or vector's dtype in Python
+
+Use `.dtype` to read a `qd.Matrix` or `qd.Vector` element type without reading its values or converting it to NumPy:
+
+```python
+matrix = qd.Matrix([[1, 2], [3, 4]], dt=qd.i32)
+print(matrix.dtype)  # i32
+```
+
+The dtype is recorded when the matrix or vector is constructed. Changing element values preserves it. The property also works on elements read from matrix/vector fields and ndarrays. Quantized fields return their compute type, such as `qd.i32` or `qd.f32`, rather than their packed storage type.
