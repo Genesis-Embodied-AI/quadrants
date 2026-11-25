@@ -1523,8 +1523,13 @@ def volatile_load(target):
             pass
 
     is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.
-    The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both
-    correct but pay an order-of-magnitude perf tax over a real volatile read.
+    The older workarounds (`grid.mem_fence()` inside the loop, or polling with `atomic_or(flags[prev], 0)`) also
+    work but pay an order-of-magnitude perf tax over a real volatile read.
+
+    Neither a volatile load nor an atomic is a memory fence: they only order the location they touch. If the reader
+    goes on to read other data the producer published (e.g. `aggregates[prev]` with plain loads), put a
+    `qd.simt.grid.mem_fence()` between the spin and those reads, and have the producer publish with a fence or an
+    atomic store (see the decoupled look-back scan in the `grid` user guide).
 
     Codegen on every backend:
 
@@ -1547,6 +1552,7 @@ def volatile_load(target):
         >>>     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate
         >>>     while qd.volatile_load(flags[prev]) == STATE_INVALID:
         >>>         pass
+        >>>     qd.simt.grid.mem_fence()  # the spin only orders `flags[prev]`; fence before reading other data
         >>>     prev_agg = qd.volatile_load(aggregates[prev])
 
     See also:
