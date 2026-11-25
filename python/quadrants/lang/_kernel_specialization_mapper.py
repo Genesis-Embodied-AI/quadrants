@@ -72,7 +72,7 @@ class KernelSpecializationMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def build_argument_specialization_signature(
+    def build_arguments_specialization_signature(
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
@@ -150,7 +150,7 @@ class KernelSpecializationMapper:
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
         # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip
-        # ``build_argument_specialization_signature()`` and
+        # ``build_arguments_specialization_signature()`` and
         # its per-launch ``validate_value_for_final_field_and_get_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
@@ -178,7 +178,7 @@ class KernelSpecializationMapper:
         # data-oriented argument keeps the same identity.
         cache_disabled |= bool(nested_signatures)
         key = (
-            self.build_argument_specialization_signature(raise_on_templated_floats, args, final_value_key_by_value_id)
+            self.build_arguments_specialization_signature(raise_on_templated_floats, args, final_value_key_by_value_id)
             + (cached_get_container_alias_key(args),)
             + nested_signatures
         )
