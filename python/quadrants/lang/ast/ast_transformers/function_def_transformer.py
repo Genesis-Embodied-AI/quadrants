@@ -417,7 +417,7 @@ class FunctionDefTransformer:
             return None
 
         # qd.Tensor in @qd.func context: polymorphic pass-by-reference. Specialization signatures are only available for
-        # top-level @qd.kernel args. Unwrap any Tensor wrapper, then create the variable directly — ndarray and field
+        # top-level @qd.kernel args. Unwrap any Tensor wrapper, then create the variable directly - ndarray and field
         # impls are both valid pass-by-reference arguments.
         if argument_type is _TensorClass:
             data = FunctionDefTransformer._unwrap_tensor(data)
