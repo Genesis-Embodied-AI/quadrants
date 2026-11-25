@@ -68,7 +68,7 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
     return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)
 
 
-def cached_get_final_value_spec_sig(
+def cached_get_final_value_specialization_signature(
     value: object, final_value_specialization_signature_by_value_id: "FinalValueSpecializationSignatureCache | None"
 ) -> tuple[Any, ...]:
     """Return a cached Final-value specialization signature, or validate, build, and cache it for this kernel call."""
@@ -79,7 +79,7 @@ def cached_get_final_value_spec_sig(
     )
     if cached is not None and cached[0] is value:
         return cached[1]
-    spec_sig = validate_value_for_final_field_and_get_key(value, live=True)
+    specialization_signature = validate_value_for_final_field_and_get_key(value, live=True)
     if final_value_specialization_signature_by_value_id is not None:
-        final_value_specialization_signature_by_value_id[id(value)] = (value, spec_sig)
-    return spec_sig
+        final_value_specialization_signature_by_value_id[id(value)] = (value, specialization_signature)
+    return specialization_signature

@@ -43,7 +43,7 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._final.final_constant_values import (
-    cached_get_final_value_spec_sig,
+    cached_get_final_value_specialization_signature,
 )
 from quadrants.lang._final.final_dataclass_fields import (
     final_field_names,
@@ -468,7 +468,9 @@ def _build_argument_specialization_signature(
                     # fastcache passes ``live=False`` (see ``validate_value_for_final_field_and_get_key`` /
                     # ``args_hasher``).
                     key_parts.append(
-                        cached_get_final_value_spec_sig(field_value, final_value_specialization_signature_by_value_id)
+                        cached_get_final_value_specialization_signature(
+                            field_value, final_value_specialization_signature_by_value_id
+                        )
                     )
                 else:
                     key_parts.append(
