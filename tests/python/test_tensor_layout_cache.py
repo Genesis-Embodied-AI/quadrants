@@ -1,8 +1,7 @@
 """Layout participates in the kernel cache key.
 
 an earlier change plumbed the ``_qd_layout`` slot through ``KernelSpecializationMapper`` features, making it part of the
-kernel
-cache key automatically. This file pins that contract down via direct ``Kernel.mapper.mapping`` inspection so a
+kernel cache key automatically. This file pins that contract down via direct ``Kernel.mapper.mapping`` inspection so a
 future refactor that drops the slot would surface immediately.
 
 Why this matters: if two different layouts shared a single compiled kernel, the AST subscript rewrite would happen

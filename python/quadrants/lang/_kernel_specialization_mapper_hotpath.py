@@ -2,10 +2,9 @@
 
 """
 This function '_build_argument_specialization_signature' is called so often during physics simulation with Genesis that
-it becomes a major
-bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M
-FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us (microseconds) but
-also ns (nanoseconds). This requires special optimization technics, to name a few:
+it becomes a major bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead
+when running 20M FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us
+(microseconds) but also ns (nanoseconds). This requires special optimization technics, to name a few:
 * Avoid attribute lookup as much as possible, indirectly for submodules, instance methods and class attributes.
 * Do not define local-scope function, because the definition itself is costly, and called methods that are not in
   global scope is slowe
