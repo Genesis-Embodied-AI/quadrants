@@ -11,10 +11,10 @@ from quadrants.types import ndarray_type
 from .. import _warnings
 from ._container_aliases import cached_get_container_alias_key
 from ._kernel_specialization_mapper_hotpath import (
+    _build_argument_specialization_signature,
     _primitive_types,
     _struct_nd_paths_for,
     annotation_has_final_subtree,
-    build_argument_specialization_signature,
 )
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
@@ -68,14 +68,14 @@ class KernelSpecializationMapper:
         self._mapping_cache_disabled: bool | None = None
 
     def build_argument_specialization_signature(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
-        # Optional ndarray + None gets its own key: build_argument_specialization_signature's NdarrayType branch reads
+        # Optional ndarray + None gets its own key: _build_argument_specialization_signature's NdarrayType branch reads
         # .shape and raises on None.
         return tuple(
             [
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else build_argument_specialization_signature(
+                    else _build_argument_specialization_signature(
                         raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name
                     )
                 )

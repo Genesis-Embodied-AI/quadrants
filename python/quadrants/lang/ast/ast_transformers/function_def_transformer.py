@@ -27,7 +27,7 @@ from quadrants.lang._final.final_dataclass_fields import (
     is_final_annotation,
 )
 from quadrants.lang._kernel_specialization_mapper_hotpath import (
-    build_argument_specialization_signature,
+    _build_argument_specialization_signature,
 )
 from quadrants.lang._name_utils import create_flat_name, create_flat_name_from_parts
 from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
@@ -197,7 +197,7 @@ class FunctionDefTransformer:
                     features = (
                         this_arg_features[field_idx]
                         if this_arg_features is not None
-                        else build_argument_specialization_signature(False, child, field.type, flat_name)
+                        else _build_argument_specialization_signature(False, child, field.type, flat_name)
                     )
                     needs_declaration_call, value = FunctionDefTransformer._decl_and_create_variable(
                         ctx, field.type, flat_name, features, "", child
@@ -477,7 +477,7 @@ class FunctionDefTransformer:
 
         # BufferView arguments are passed by reference.
         # Dtype validation happens at the kernel boundary
-        # (_kernel_specialization_mapper_hotpath.build_argument_specialization_signature),
+        # (_kernel_specialization_mapper_hotpath._build_argument_specialization_signature),
         # not here — data.arr is an Expr node during func compilation, not a real Ndarray.
         if isinstance(argument_type, buffer_view_type.BufferViewType):
             if not isinstance(data, BufferView):
