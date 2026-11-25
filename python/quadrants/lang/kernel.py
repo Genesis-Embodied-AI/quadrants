@@ -510,7 +510,7 @@ class Kernel(FuncBase):
             print(f"[NOT_PURE] Debug information: not pure: {self.func.__name__}")
         return None
 
-    def materialize(self, key: "CompiledKernelKeyType | None", py_args: tuple[Any, ...], arg_features=None):
+    def materialize(self, key: "CompiledKernelKeyType | None", py_args: tuple[Any, ...], arg_spec_sigs=None):
         if key is None:
             key = (self.func, 0, self.autodiff_mode)
         if key in self.materialized_kernels:
@@ -567,7 +567,7 @@ class Kernel(FuncBase):
                     kernel_compile_context=kernel_ctx,
                     py_args=py_args,
                     template_slot_locations=self.template_slot_locations,
-                    arg_features=arg_features,
+                    arg_spec_sigs=arg_spec_sigs,
                 )
                 runtime._current_kernel_compile_context = ctx.kernel_compile_context
 
@@ -970,11 +970,11 @@ class Kernel(FuncBase):
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
-            instance_id, arg_features = self.mapper.lookup(self.raise_on_templated_floats, py_args)
+            instance_id, arg_spec_sigs = self.mapper.lookup(self.raise_on_templated_floats, py_args)
         except Exception as e:
             raise type(e)(f"exception while trying to ensure compiled {self.func}:\n{e}") from e
         key = (self.func, instance_id, self.autodiff_mode)
-        self.materialize(key=key, py_args=py_args, arg_features=arg_features)
+        self.materialize(key=key, py_args=py_args, arg_spec_sigs=arg_spec_sigs)
         return key
 
     # For small kernels (< 3us), the performance can be pretty sensitive to overhead in __call__

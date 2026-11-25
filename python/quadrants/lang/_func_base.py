@@ -356,7 +356,7 @@ class FuncBase:
         py_args: tuple[Any, ...],
         template_slot_locations=(),
         is_kernel: bool = True,
-        arg_features=None,
+        arg_spec_sigs=None,
         ast_builder: "ASTBuilder | None" = None,
         is_real_function: bool = False,
         kernel_compile_context: KernelCompileContext | None = None,
@@ -413,7 +413,7 @@ class FuncBase:
             is_kernel=is_kernel,
             is_pure=is_pure,
             func=self,  # type: ignore[arg-type]
-            arg_features=arg_features,
+            arg_spec_sigs=arg_spec_sigs,
             global_vars=global_vars,
             template_vars=template_vars,
             py_args=py_args,
