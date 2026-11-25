@@ -178,6 +178,10 @@ class TemplateMapper:
         launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(
             args, self.arguments, self.template_slot_locations
         )
+        # Exclude dataclasses beneath data-oriented arguments from this identity cache.
+        # A nested dataclass member can change type while the containing argument keeps the same identity.
+        # A cache hit would then skip schema inference and could select the wrong compiled kernel.
+        cache_disabled = cache_disabled or bool(launch_arg_schemas)
         if runtime_kernel is not None:
             runtime_kernel._launch_arg_schemas = launch_arg_schemas
             runtime_kernel._runtime_has_deferred |= any(
@@ -208,10 +212,7 @@ class TemplateMapper:
             count = self.mapping[key] = len(self.mapping)
 
         # Skip the store too when disabled, so the read above always misses and every launch revalidates.
-        # `not launch_arg_schemas` excludes dataclasses beneath data-oriented arguments from this identity cache.
-        # A nested dataclass member can change type while the containing argument keeps the same identity.
-        # A cache hit would then skip schema inference and could select the wrong compiled kernel.
-        if not cache_disabled and not launch_arg_schemas:
+        if not cache_disabled:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.
             mapping_cache_tracker_: list[ReferenceType | None] = [None]
