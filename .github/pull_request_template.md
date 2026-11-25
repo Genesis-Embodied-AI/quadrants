@@ -1,6 +1,6 @@
 <!-- Start the PR title with [SomeTag], followed by a short summary. Do not end the title with a period.
 Example: [Doc] Clarify installation instructions
-Prefer a specific tag from https://github.com/Genesis-Embodied-AI/quadrants/blob/main/misc/prtags.json.
+Prefer a specific tag from misc/prtags.json.
 If no existing tag fits, consider opening a PR to add a new tag and description to misc/prtags.json.
 Reserve [Misc] for changes that do not fit a meaningful category; avoid using it as the default. -->
 
