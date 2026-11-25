@@ -41,8 +41,10 @@ def prepare_kernel_dataclass_args_for_mapper(
         kernel.mapper._mapping_cache_tracker.clear()
     kernel._launch_arg_schemas = ()
     # Per-call cache: id(value) -> (value, specialization signature); retain the value to verify its identity.
-    final_value_key_by_value_id: FinalValueKeyCache = {}
-    kernel.arg_metas = infer_kernel_dataclass_arg_types(kernel.orig_arguments, py_objs, final_value_key_by_value_id)
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache = {}
+    kernel.arg_metas = infer_kernel_dataclass_arg_types(
+        kernel.orig_arguments, py_objs, final_value_specialization_signature_by_value_id
+    )
     kernel.mapper.arguments = kernel.arg_metas
     has_deferred_error = False
     unstable = False
@@ -63,7 +65,7 @@ def prepare_kernel_dataclass_args_for_mapper(
     kernel._runtime_metadata_args_hash = args_hash if not unstable and not has_deferred_error else None
     kernel._runtime_metadata_defaults = defaults
 
-    return final_value_key_by_value_id
+    return final_value_specialization_signature_by_value_id
 
 
 def build_nested_dataclass_specialization_signatures(
@@ -72,7 +74,7 @@ def build_nested_dataclass_specialization_signatures(
     arg_metas: list[ArgMetadata],
     template_slot_locations: list[int],
     runtime_kernel: "Kernel | None",
-    final_value_key_by_value_id: FinalValueKeyCache | None,
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None,
 ) -> tuple[tuple[int, tuple[str, ...], Any], ...]:
     """Collect nested dataclass schemas, update kernel metadata, and return their specialization signatures."""
     launch_arg_schemas = collect_dataclass_schemas_in_data_oriented_args(py_args, arg_metas, template_slot_locations)
@@ -91,7 +93,7 @@ def build_nested_dataclass_specialization_signatures(
                 get_member_at_path(py_args[index], path),
                 schema,
                 ".".join((arg_metas[index].name, *path)),
-                final_value_key_by_value_id,
+                final_value_specialization_signature_by_value_id,
             ),
         )
         for index, path, schema in launch_arg_schemas

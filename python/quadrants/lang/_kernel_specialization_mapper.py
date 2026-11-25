@@ -76,7 +76,7 @@ class KernelSpecializationMapper:
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
-        final_value_key_by_value_id: FinalValueKeyCache | None = None,
+        final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
     ) -> Key:
         # Optional ndarray + None gets its own key: _build_argument_specialization_signature's NdarrayType branch reads
         # .shape and raises on None.
@@ -90,7 +90,7 @@ class KernelSpecializationMapper:
                         arg,
                         kernel_arg.annotation,
                         kernel_arg.name,
-                        final_value_key_by_value_id,
+                        final_value_specialization_signature_by_value_id,
                     )
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
@@ -101,7 +101,7 @@ class KernelSpecializationMapper:
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
-        final_value_key_by_value_id: FinalValueKeyCache | None = None,
+        final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
         runtime_kernel=None,
     ) -> tuple[int, Key]:
         if len(args) != self.num_args:
@@ -122,7 +122,9 @@ class KernelSpecializationMapper:
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
         if runtime_kernel is not None:
-            final_value_key_by_value_id = prepare_kernel_dataclass_args_for_mapper(runtime_kernel, args, args_hash)
+            final_value_specialization_signature_by_value_id = prepare_kernel_dataclass_args_for_mapper(
+                runtime_kernel, args, args_hash
+            )
         # Include array-member identities so replacing an array cannot reuse a mapping for its previous dtype or rank.
         # Search template arguments, which include data-oriented objects.
         nd_ids: list = []
@@ -172,13 +174,15 @@ class KernelSpecializationMapper:
             self.arguments,
             self.template_slot_locations,
             runtime_kernel,
-            final_value_key_by_value_id,
+            final_value_specialization_signature_by_value_id,
         )
         # This cache uses argument identities. A nested dataclass member can change type while the containing
         # data-oriented argument keeps the same identity.
         cache_disabled |= bool(nested_signatures)
         key = (
-            self.build_arguments_specialization_signature(raise_on_templated_floats, args, final_value_key_by_value_id)
+            self.build_arguments_specialization_signature(
+                raise_on_templated_floats, args, final_value_specialization_signature_by_value_id
+            )
             + (cached_get_container_alias_key(args),)
             + nested_signatures
         )

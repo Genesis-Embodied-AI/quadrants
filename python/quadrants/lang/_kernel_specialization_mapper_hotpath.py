@@ -235,7 +235,7 @@ def _build_argument_specialization_signature(
     arg: Any,
     annotation: AnnotationType,
     arg_name: str,
-    final_value_key_by_value_id=None,
+    final_value_specialization_signature_by_value_id=None,
 ) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
@@ -466,7 +466,7 @@ def _build_argument_specialization_signature(
                     # ``args_hasher``).
                     key_parts.append(
                         get_cached_or_validate_value_for_final_field_and_get_key(
-                            field_value, final_value_key_by_value_id
+                            field_value, final_value_specialization_signature_by_value_id
                         )
                     )
                 else:
@@ -476,7 +476,7 @@ def _build_argument_specialization_signature(
                             field_value,
                             field.type,
                             create_flat_name(arg_name, field.name),
-                            final_value_key_by_value_id,
+                            final_value_specialization_signature_by_value_id,
                         )
                     )
             key = tuple(key_parts)
@@ -488,7 +488,7 @@ def _build_argument_specialization_signature(
                         getattr(arg, field.name),
                         field.type,
                         create_flat_name(arg_name, field.name),
-                        final_value_key_by_value_id,
+                        final_value_specialization_signature_by_value_id,
                     )
                     for field in annotation_fields.values()
                     if field._field_type is _FIELD

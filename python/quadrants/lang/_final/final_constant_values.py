@@ -67,10 +67,14 @@ def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -
 
 
 def get_cached_or_validate_value_for_final_field_and_get_key(
-    value: object, final_value_key_by_value_id: "FinalValueKeyCache | None"
+    value: object, final_value_specialization_signature_by_value_id: "FinalValueKeyCache | None"
 ) -> tuple[Any, ...]:
     """Reuse a value key validated during this dispatch only; never retain it across kernel calls."""
-    cached = final_value_key_by_value_id.get(id(value)) if final_value_key_by_value_id is not None else None
+    cached = (
+        final_value_specialization_signature_by_value_id.get(id(value))
+        if final_value_specialization_signature_by_value_id is not None
+        else None
+    )
     if cached is not None and cached[0] is value:
         return cached[1]
     return validate_value_for_final_field_and_get_key(value, live=True)

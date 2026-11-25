@@ -149,7 +149,7 @@ def infer_member_type(
     path: str,
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None = None,
-    final_value_key_by_value_id: FinalValueKeyCache | None = None,
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
 ) -> tuple[InferredMemberType | DeferredMemberType, bool]:
     """Return (member_type, needs_member_check) inferred from the arriving value.
 
@@ -159,7 +159,11 @@ def infer_member_type(
     # FIXME: Generalize runtime type inference to all kernel arguments, not just dataclass members.
     if isinstance(py_obj, Tensor):
         member_type, _ = infer_member_type(
-            py_obj._unwrap(), path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
+            py_obj._unwrap(),
+            path,
+            ancestor_ids,
+            non_frozen_ancestor_path,
+            final_value_specialization_signature_by_value_id,
         )
         if is_runtime_dataclass_schema(member_type):
             return member_type, member_type._qd_needs_member_check
@@ -169,7 +173,7 @@ def infer_member_type(
 
     if hasattr(type(py_obj), "__dataclass_fields__"):
         schema = cached_infer_dataclass_schema(
-            py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_key_by_value_id
+            py_obj, path, ancestor_ids, non_frozen_ancestor_path, final_value_specialization_signature_by_value_id
         )
         return schema, schema._qd_needs_member_check
 
@@ -249,7 +253,7 @@ def _infer_dataclass_runtime_member_types(
     path: str,
     ancestor_ids: frozenset[int],
     non_frozen_ancestor_path: str | None,
-    final_value_key_by_value_id: FinalValueKeyCache | None,
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None,
 ) -> tuple[
     "list[InferredMemberType | DeferredMemberType | _SpecialForm]",
     bool,
@@ -274,7 +278,9 @@ def _infer_dataclass_runtime_member_types(
         member = getattr(dataclass_instance, name)
         if is_final:
             needs_member_check = True
-            member_type = infer_final_field_annotation(member, final_non_frozen_path, name, final_value_key_by_value_id)
+            member_type = infer_final_field_annotation(
+                member, final_non_frozen_path, name, final_value_specialization_signature_by_value_id
+            )
         else:
             member_non_frozen_ancestor_path = None
             if not frozen:
@@ -282,7 +288,11 @@ def _infer_dataclass_runtime_member_types(
             elif non_frozen_ancestor_path is not None:
                 member_non_frozen_ancestor_path = f"{non_frozen_ancestor_path}.{name}"
             member_type, _needs_member_check = infer_member_type(
-                member, f"{path}.{name}", ancestor_ids, member_non_frozen_ancestor_path, final_value_key_by_value_id
+                member,
+                f"{path}.{name}",
+                ancestor_ids,
+                member_non_frozen_ancestor_path,
+                final_value_specialization_signature_by_value_id,
             )
             needs_member_check |= _needs_member_check
             if _needs_member_check:
@@ -340,7 +350,7 @@ def cached_infer_dataclass_schema(
     path: str,
     ancestor_ids: frozenset[int] = frozenset(),
     non_frozen_ancestor_path: str | None = None,
-    final_value_key_by_value_id: FinalValueKeyCache | None = None,
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
 ) -> type[RuntimeDataclassSchema]:
     """Build or reuse a private schema class, validating mutable members before cache reuse when needed.
 
@@ -382,7 +392,7 @@ def cached_infer_dataclass_schema(
         path,
         ancestor_ids,
         non_frozen_ancestor_path,
-        final_value_key_by_value_id,
+        final_value_specialization_signature_by_value_id,
     )
     dataclass_type_and_member_types = (
         id(dataclass_type),
@@ -416,7 +426,7 @@ def cached_infer_dataclass_schema(
 def infer_kernel_dataclass_arg_types(
     arg_metas: list[ArgMetadata],
     py_objs: tuple[Any, ...],
-    final_value_key_by_value_id: FinalValueKeyCache | None = None,
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
 ) -> list[ArgMetadata]:
     """Replace kernel dataclass parameter annotations with schemas inferred from their arriving values."""
     resolved_arg_metas = []
@@ -424,7 +434,9 @@ def infer_kernel_dataclass_arg_types(
         if hasattr(type(py_obj), "__dataclass_fields__"):
             arg_meta = ArgMetadata(
                 cached_infer_dataclass_schema(
-                    py_obj, arg_meta.name, final_value_key_by_value_id=final_value_key_by_value_id
+                    py_obj,
+                    arg_meta.name,
+                    final_value_specialization_signature_by_value_id=final_value_specialization_signature_by_value_id,
                 ),
                 arg_meta.name,
                 arg_meta.default,
