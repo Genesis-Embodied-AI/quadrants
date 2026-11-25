@@ -1,9 +1,3 @@
-Issue: #
+<!-- Briefly describe the problem and what this PR changes. Use one or two sentences. -->
 
-### Brief Summary
-
-copilot:summary
-
-### Walkthrough
-
-copilot:walkthrough
+- <!-- Summarize a main change. Add bullets only where useful. -->
