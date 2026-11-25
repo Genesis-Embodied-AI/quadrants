@@ -120,7 +120,6 @@ def test_inferred_member_check_requirements() -> None:
         assert cached_infer_dataclass_schema(state, "state") is schema
 
 
-
 @pytest.mark.parametrize("backend", ["numpy", "torch"])
 @test_utils.test(arch=qd.cpu)
 def test_array_members_do_not_need_schema_checks(backend: str) -> None:

@@ -313,9 +313,9 @@ def _create_dataclass_field(
 
 def _store_schema_in_instance_cache(
     dataclass_instance: DataclassInstance,
-    schema_by_compiler_settings_and_ancestor_path: dict[
-        InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks
-    ] | None,
+    schema_by_compiler_settings_and_ancestor_path: (
+        dict[InferenceContextKey, type[RuntimeDataclassSchema] | SchemaNeedingMemberChecks] | None
+    ),
     compiler_settings_and_ancestor_path: InferenceContextKey,
     schema: type[RuntimeDataclassSchema],
     needs_member_check: bool,
@@ -334,9 +334,7 @@ def _store_schema_in_instance_cache(
             return
 
     schema_by_compiler_settings_and_ancestor_path[compiler_settings_and_ancestor_path] = (
-        schema
-        if not needs_member_check
-        else SchemaNeedingMemberChecks(schema, member_guards)
+        schema if not needs_member_check else SchemaNeedingMemberChecks(schema, member_guards)
     )
 
 
