@@ -3999,11 +3999,11 @@ def test_final_float_cached_specialization_signature_revalidated_after_reinit():
     cfg = Cfg(dt=0.5, n=3)
 
     # First launch with the option OFF: compiles fine. A Final-bearing config is deliberately never cached, so the
-    # instance carries no ``_qd_specialization_signature`` to short-circuit (and thus bypass a guard) on later launches.
+    # instance carries no ``_qd_spec_sig`` to short-circuit (and thus bypass a guard) on later launches.
     qd.init(arch=getattr(qd, arch_name))
     run(cfg)
     # Final-bearing config is never cached; every launch recomputes+revalidates
-    assert not hasattr(cfg, "_qd_specialization_signature")
+    assert not hasattr(cfg, "_qd_spec_sig")
 
     # Re-initialise with the option ON and reuse the SAME instance: the recompute must re-run the guard.
     qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)

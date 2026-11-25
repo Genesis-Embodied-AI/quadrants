@@ -191,7 +191,7 @@ def test_frozen_dc_unwrapped_cache_populated():
 
 
 # ---------------------------------------------------------------------------
-# Template-key cache: verify _qd_specialization_signature is cached per annotated type (covariant reuse).
+# Template-key cache: verify _qd_spec_sig is cached per annotated type (covariant reuse).
 # ---------------------------------------------------------------------------
 
 
@@ -223,21 +223,18 @@ def test_frozen_dc_template_key_cache_populated():
 
     sub = Sub(x1=qd.ndarray(qd.i32, shape=(4,)), x2=qd.ndarray(qd.f32, shape=(2, 2)))
 
-    assert not hasattr(sub, "_qd_specialization_signature")
+    assert not hasattr(sub, "_qd_spec_sig")
     use1(sub)
     schema1 = use1._primal.arg_metas[0].annotation
-    assert id(schema1) in sub._qd_specialization_signature
+    assert id(schema1) in sub._qd_spec_sig
     use2(sub)
     schema2 = use2._primal.arg_metas[0].annotation
-    assert id(schema1) in sub._qd_specialization_signature and id(schema2) in sub._qd_specialization_signature
-    assert (
-        sub._qd_specialization_signature[id(schema1)][0] is schema1
-        and sub._qd_specialization_signature[id(schema2)][0] is schema2
-    )
+    assert id(schema1) in sub._qd_spec_sig and id(schema2) in sub._qd_spec_sig
+    assert sub._qd_spec_sig[id(schema1)][0] is schema1 and sub._qd_spec_sig[id(schema2)][0] is schema2
 
     # Both kernels infer the complete subclass, rather than selecting fields from the annotated base.
     assert schema1 is schema2
-    assert sub._qd_specialization_signature[id(schema1)][1] == sub._qd_specialization_signature[id(schema2)][1]
+    assert sub._qd_spec_sig[id(schema1)][1] == sub._qd_spec_sig[id(schema2)][1]
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +294,7 @@ def test_frozen_dc_caches_identity_keyed_against_metaclass_eq():
     """Two distinct ancestor dataclasses whose metaclass makes them compare *and* hash equal must not collide in the
     per-annotation caches: a class-keyed dict would serve one ancestor's cached view for the other, but ``id()`` keying
     with an ``is`` guard keeps them separate. Exercised on ``_get_frozen_dc_unwrapped`` (``_qd_dc_unwrapped`` and
-    ``_qd_all_field``); ``_qd_specialization_signature`` uses identical keying."""
+    ``_qd_all_field``); ``_qd_spec_sig`` uses identical keying."""
     from quadrants.lang._func_base import _get_frozen_dc_unwrapped
 
     class EqMeta(type):

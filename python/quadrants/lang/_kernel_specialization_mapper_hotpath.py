@@ -2,10 +2,9 @@
 
 """
 This function '_build_argument_specialization_signature' is called so often during physics simulation with Genesis that
-it becomes a major
-bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead when running 20M
-FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us (microseconds) but
-also ns (nanoseconds). This requires special optimization technics, to name a few:
+it becomes a major bottleneck for simple scenes running faster than 10M FPS. In practice, it adds about 100% overhead
+when running 20M FPS, and things get worst as FPS increases. At this scale, it is necessary to chase not just us
+(microseconds) but also ns (nanoseconds). This requires special optimization technics, to name a few:
 * Avoid attribute lookup as much as possible, indirectly for submodules, instance methods and class attributes.
 * Do not define local-scope function, because the definition itself is costly, and called methods that are not in
   global scope is slowe
@@ -427,7 +426,7 @@ def _build_argument_specialization_signature(
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_runtime_schema = hasattr(annotation, "_qd_underlying_dataclass")
         is_frozen = annotation.__hash__ is not None and (not is_runtime_schema or not annotation._qd_needs_member_check)
-        # Serve the ``_qd_specialization_signature`` cache only in the default (non-strict) mode: the cached key is
+        # Serve the ``_qd_spec_sig`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
         # write below refuses to store one, so this read falls through and re-runs validation each launch.
@@ -439,7 +438,7 @@ def _build_argument_specialization_signature(
             try:
                 # Instance-level (not class-level): instances of one class may differ in memory layout. The reserved
                 # ``_qd_`` prefix avoids collision with a user field named ``_key``. Absent under ``slots=True``.
-                _key_hit = arg._qd_specialization_signature.get(id(annotation))
+                _key_hit = arg._qd_spec_sig.get(id(annotation))
             except AttributeError:
                 _key_hit = None
             if _key_hit is not None and _key_hit[0] is annotation:
@@ -505,15 +504,15 @@ def _build_argument_specialization_signature(
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
             try:
-                _key_map = arg._qd_specialization_signature
+                _key_map = arg._qd_spec_sig
             except AttributeError:
                 _key_map = None
             if _key_map is None:
                 try:
                     # FIXME: Do not modify arg. Do not use setattr.
-                    object.__setattr__(arg, "_qd_specialization_signature", {id(annotation): (annotation, key)})
+                    object.__setattr__(arg, "_qd_spec_sig", {id(annotation): (annotation, key)})
                 except AttributeError:
-                    # Impossible to store _qd_specialization_signature at instance-level if 'slots=True'. It is
+                    # Impossible to store _qd_spec_sig at instance-level if 'slots=True'. It is
                     # recomputed each time.
                     pass
             else:
