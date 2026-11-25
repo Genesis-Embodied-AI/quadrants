@@ -2,7 +2,9 @@
 
 import warnings
 
-from quadrants.lang._kernel_specialization_mapper import KernelSpecializationMapper as TemplateMapper
+from quadrants.lang._kernel_specialization_mapper import (
+    KernelSpecializationMapper as TemplateMapper,
+)
 
 warnings.warn(
     "quadrants.lang._template_mapper.TemplateMapper is deprecated. "
