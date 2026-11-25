@@ -393,7 +393,7 @@ class Kernel(FuncBase):
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list[tuple[int, tuple[str, ...]]] = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
-        impl.on_reset(self._clear_specialization_and_launch_caches)
+        impl.on_reset(self._on_reset)
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
@@ -407,7 +407,7 @@ class Kernel(FuncBase):
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
 
-    def _clear_specialization_and_launch_caches(self) -> None:
+    def _on_reset(self) -> None:
         """Release cached arguments and launch metadata when the runtime publishes a reset."""
         # Specialization identifiers restart with the mapper; discard their launch metadata together.
         self.mapper = TemplateMapper(self.arg_metas, self.template_slot_locations)
