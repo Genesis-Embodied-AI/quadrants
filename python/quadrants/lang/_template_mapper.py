@@ -138,7 +138,7 @@ class TemplateMapper:
                 _class_needs_ndarray_member_walk[cls] = disposition
             if disposition is _SKIP:
                 continue
-            # Inline the cached-path lookup to avoid a helper call on each launch.
+            # PERF: Inline the cached-path lookup to avoid a helper call on each launch.
             try:
                 paths = arg.__dict__["_qd_nd_paths"]
             except (AttributeError, KeyError):
