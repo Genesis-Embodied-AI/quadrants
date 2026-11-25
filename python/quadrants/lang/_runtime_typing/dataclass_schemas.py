@@ -361,8 +361,6 @@ def cached_infer_dataclass_schema(
     )
     schema = _schema_by_dataclass_type_and_member_types.get(dataclass_type_and_member_types)
     if schema is None:
-        # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
-        # The field cache retains the dataclass type and field order; member types and stability come from inference.
         fields = {
             name: _create_dataclass_field(name, member_type)
             for (name, _), member_type in zip(field_names_and_final, member_types)
