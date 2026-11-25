@@ -67,7 +67,7 @@ class KernelSpecializationMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def build_argument_specialization_signature(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+    def build_arguments_specialization_signature(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
         # Optional ndarray + None gets its own key: _build_argument_specialization_signature's NdarrayType branch reads
         # .shape and raises on None.
         return tuple(
@@ -137,7 +137,7 @@ class KernelSpecializationMapper:
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
         # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip
-        # ``build_argument_specialization_signature()`` and
+        # ``build_arguments_specialization_signature()`` and
         # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
@@ -154,7 +154,7 @@ class KernelSpecializationMapper:
                 return self._mapping_cache[args_hash]
 
         alias_key = cached_get_container_alias_key(args)
-        key = self.build_argument_specialization_signature(raise_on_templated_floats, args) + (alias_key,)
+        key = self.build_arguments_specialization_signature(raise_on_templated_floats, args) + (alias_key,)
         try:
             count = self.mapping[key]
         except KeyError:
