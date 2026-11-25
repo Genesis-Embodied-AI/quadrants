@@ -175,8 +175,7 @@ class KernelSpecializationMapper:
             final_value_key_by_value_id,
         )
         # This cache uses argument identities. A nested dataclass member can change type while the containing
-        # data-oriented argument keeps the same identity. Caching calls with nested signatures would let a cache hit
-        # skip schema inference and could select the wrong compiled kernel.
+        # data-oriented argument keeps the same identity.
         cache_disabled |= bool(nested_signatures)
         key = (
             self.build_argument_specialization_signature(raise_on_templated_floats, args, final_value_key_by_value_id)
