@@ -1,0 +1,28 @@
+quadrants.types.utils
+=====================
+
+.. py:module:: quadrants.types.utils
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   quadrants.types.utils.is_signed
+   quadrants.types.utils.is_integral
+   quadrants.types.utils.is_real
+   quadrants.types.utils.is_tensor
+
+
+Module Contents
+---------------
+
+.. py:data:: is_signed
+
+.. py:data:: is_integral
+
+.. py:data:: is_real
+
+.. py:data:: is_tensor
+
