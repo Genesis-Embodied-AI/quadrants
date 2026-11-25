@@ -2,7 +2,7 @@ import functools
 import numbers
 from collections.abc import Iterable
 from itertools import product
-from typing import cast
+from typing import NoReturn, cast
 
 import numpy as np
 
@@ -731,21 +731,11 @@ class Matrix(QuadrantsOperations):
         return self.entries
 
     @quadrants_scope
-    def __qd_repr__(self):
-        yield "["
-        for i in range(self.n):
-            if i:
-                yield ", "
-            if self.m != 1:
-                yield "["
-            for j in range(self.m):
-                if j:
-                    yield ", "
-                # FIXME: Matrix is not callable; repair this legacy representation method separately.
-                yield self(i, j)  # pyright: ignore[reportCallIssue]
-            if self.m != 1:
-                yield "]"
-        yield "]"
+    def __qd_repr__(self) -> NoReturn:
+        """Reject kernel formatting of a Python Matrix or Vector object."""
+        raise NotImplementedError(
+            "Printing this Python Matrix or Vector inside a kernel is not implemented; print its scalar elements instead."
+        )
 
     def __str__(self):
         """Python scope matrix print support."""

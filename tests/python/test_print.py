@@ -666,3 +666,19 @@ def test_fp16_print_ir():
             print(x[i])
 
     test()
+
+
+@test_utils.test(arch=qd.cpu)
+def test_print_template_matrix_is_unsupported() -> None:
+    """Printing a Matrix or Vector through Template reports an unsupported operation."""
+
+    @qd.kernel
+    def show(value: qd.Template) -> None:
+        print(value)
+
+    for value in (qd.Matrix([[1, 2], [3, 4]]), qd.Vector([1, 2])):
+        with pytest.raises(
+            qd.QuadrantsCompilationError, match="NotImplementedError: Printing this Python Matrix or Vector"
+        ):
+            # The compiler wraps Python exceptions with the kernel source location.
+            show(value)
