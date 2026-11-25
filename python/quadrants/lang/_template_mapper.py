@@ -9,10 +9,13 @@ from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
 from quadrants.lang._runtime_typing.dataclass_schemas import (
     prepare_kernel_dataclass_args_for_mapper,
 )
+from quadrants.lang._runtime_typing.specialization_signatures import (
+    extract_dataclass_specialization_signatures,
+)
 from quadrants.lang._runtime_typing.types import FinalValueKeyCache
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
-from quadrants.lang.util import get_member_at_path, is_data_oriented
+from quadrants.lang.util import is_data_oriented
 from quadrants.types import ndarray_type
 
 from .. import _warnings
@@ -192,19 +195,8 @@ class TemplateMapper:
             cached_get_container_alias_key(args),
         )
         if launch_arg_schemas:
-            key += tuple(
-                (
-                    index,
-                    path,
-                    _extract_arg(
-                        raise_on_templated_floats,
-                        get_member_at_path(args[index], path),
-                        schema,
-                        ".".join((self.arguments[index].name, *path)),
-                        final_value_key_by_value_id,
-                    ),
-                )
-                for index, path, schema in launch_arg_schemas
+            key += extract_dataclass_specialization_signatures(
+                raise_on_templated_floats, args, self.arguments, launch_arg_schemas, final_value_key_by_value_id
             )
         try:
             count = self.mapping[key]
