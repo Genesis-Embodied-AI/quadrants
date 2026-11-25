@@ -1,6 +1,6 @@
 """Layout participates in the kernel cache key.
 
-an earlier change plumbed the ``_qd_layout`` slot through ``TemplateMapper`` features, making it part of the kernel
+an earlier change plumbed the ``_qd_layout`` slot through ``TemplateMapper`` specialization signatures, making it part of the kernel
 cache key automatically. This file pins that contract down via direct ``Kernel.mapper.mapping`` inspection so a
 future refactor that drops the slot would surface immediately.
 

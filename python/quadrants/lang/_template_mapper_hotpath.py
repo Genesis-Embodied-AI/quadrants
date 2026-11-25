@@ -399,7 +399,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        # Serve the ``_qd_specialization_signature`` cache only in the default (non-strict) mode: the cached key is
+        # Serve the ``_qd_spec_sig`` cache only in the default (non-strict) mode: the cached key is
         # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
         # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
         # write below refuses to store one, so this read falls through and re-runs validation each launch.
@@ -411,7 +411,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             try:
                 # Instance-level (not class-level): instances of one class may differ in memory layout. The reserved
                 # ``_qd_`` prefix avoids collision with a user field named ``_key``. Absent under ``slots=True``.
-                _key_hit = arg._qd_specialization_signature.get(id(annotation))
+                _key_hit = arg._qd_spec_sig.get(id(annotation))
             except AttributeError:
                 _key_hit = None
             if _key_hit is not None and _key_hit[0] is annotation:
@@ -467,15 +467,15 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # never store one (making the read above fall through).
         if is_frozen and not subtree_has_final_fields(annotation):
             try:
-                _key_map = arg._qd_specialization_signature
+                _key_map = arg._qd_spec_sig
             except AttributeError:
                 _key_map = None
             if _key_map is None:
                 try:
                     # FIXME: Avoid setattr and store this cache without modifying passed-in objects.
-                    object.__setattr__(arg, "_qd_specialization_signature", {id(annotation): (annotation, key)})
+                    object.__setattr__(arg, "_qd_spec_sig", {id(annotation): (annotation, key)})
                 except AttributeError:
-                    # Impossible to store _qd_specialization_signature at instance-level if 'slots=True'. It is
+                    # Impossible to store _qd_spec_sig at instance-level if 'slots=True'. It is
                     # recomputed each time.
                     pass
             else:

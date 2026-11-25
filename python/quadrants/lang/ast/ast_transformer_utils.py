@@ -236,7 +236,7 @@ class FuncCompilePassContext:
         end_lineno: int,
         is_kernel: bool,
         func: "FuncBase",
-        arg_features: list[tuple[Any, ...]] | None,
+        arg_spec_sigs: list[tuple[Any, ...]] | None,
         global_vars: dict[str, Any],
         template_vars: dict[str, Any],
         is_pure: bool,
@@ -257,7 +257,7 @@ class FuncCompilePassContext:
         self.loop_scopes: List[LoopScopeAttribute] = []
         self.template_slot_locations = template_slot_locations
         self.is_kernel: bool = is_kernel
-        self.arg_features: list[tuple[Any, ...]] = arg_features
+        self.arg_spec_sigs: list[tuple[Any, ...]] = arg_spec_sigs
         self.returns = None
         self.global_vars: dict[str, Any] = global_vars
         self.template_vars: dict[str, Any] = template_vars

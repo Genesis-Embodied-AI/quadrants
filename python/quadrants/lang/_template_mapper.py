@@ -52,15 +52,10 @@ def _destroy_callback(template_mapper_ref: ReferenceType["TemplateMapper"], ref:
 
 
 class TemplateMapper:
-    """
-    This should probably be renamed to sometihng like FeatureMapper, or
-    FeatureExtractor, since:
-    - it's not specific to templates
-    - it extracts what are later called 'features', for example for ndarray this includes:
-        - element type
-        - number dimensions
-        - needs grad (or not)
-    - these are returned as a heterogeneous tuple, whose contents depends on the type
+    """Map argument specialization signatures to compiled-kernel identifiers.
+
+    Each argument's specialization signature is a heterogeneous tuple determined by its type. For example, an
+    ndarray contributes its element type, number of dimensions, and whether it needs gradients.
     """
 
     def __init__(self, arguments: list[ArgMetadata], template_slot_locations: list[int]) -> None:
