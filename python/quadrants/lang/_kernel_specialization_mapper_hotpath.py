@@ -51,7 +51,7 @@ from quadrants.lang._final.final_dataclass_fields import (
 )
 from quadrants.lang._name_utils import create_flat_name
 from quadrants.lang._ndarray import Ndarray
-from quadrants.lang._runtime_typing.types import DeferredMemberType
+from quadrants.lang._runtime_typing.types import DeferredMemberType, FinalValueKeyCache
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
 from quadrants.lang.exception import QuadrantsRuntimeTypeError
@@ -235,7 +235,7 @@ def _build_argument_specialization_signature(
     arg: Any,
     annotation: AnnotationType,
     arg_name: str,
-    final_value_specialization_signature_by_value_id=None,
+    final_value_specialization_signature_by_value_id: FinalValueKeyCache | None = None,
 ) -> Any:
     # ``qd.Tensor`` wrappers passed as struct fields. Top-level kernel-arg unwrap in ``Kernel.__call__`` covers direct
     # args, but the dataclass-field recursion at the bottom of this function walks struct attributes via raw
