@@ -122,7 +122,7 @@ def test_reset_releases_template_arguments() -> None:
 
 @test_utils.test(arch=qd.cpu)
 def test_reset_clears_nested_dataclass_launch_metadata() -> None:
-    """Rebuild scalar and ndarray launch metadata when specialization identifiers restart after reset."""
+    """Check that reset clears nested dataclass launch metadata and reinitialization rebuilds it."""
 
     @dataclasses.dataclass
     class State:
