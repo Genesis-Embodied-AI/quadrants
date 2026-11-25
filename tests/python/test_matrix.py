@@ -1413,3 +1413,51 @@ def test_matrix_loop_unique():
 
     for u in range(10):
         assert F_x[u][1] == 1.0
+
+
+@pytest.mark.parametrize("storage", ["python", "field", "ndarray"])
+@test_utils.test(arch=qd.cpu)
+def test_matrix_dtype_without_value_reads(storage: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Matrix and Vector expose their dtype without converting or reading their values."""
+    import quadrants.lang.matrix as matrix_module
+
+    def reject_value_read(*args: object, **kwargs: object) -> None:
+        raise AssertionError("dtype must not read element values")
+
+    monkeypatch.setattr(qd.Matrix, "to_numpy", reject_value_read)
+    monkeypatch.setattr(matrix_module, "_read_host_access", reject_value_read)
+    for matrix_type, dimensions in ((qd.Vector, (2,)), (qd.Matrix, (2, 2))):
+        for dtype in (qd.i32, qd.f32):
+            if storage == "python":
+                value = matrix_type(np.ones(dimensions), dt=dtype)
+            else:
+                backing = getattr(matrix_type, storage)(*dimensions, dtype=dtype, shape=1)
+                value = backing[0]
+            assert value.dtype == dtype
+            value.fill(3)
+            assert value.dtype == dtype
+
+    inferred = qd.Vector(np.ones(2, dtype=np.int16))
+    assert inferred.dtype == qd.i16
+
+
+@pytest.mark.parametrize("quant_kind", ["int", "fixed", "float"])
+@test_utils.test(arch=qd.cpu, require=qd.extension.quant)
+def test_quantized_matrix_dtype(quant_kind: str) -> None:
+    """Quantized matrix/vector elements expose their compute type, not their packed storage type."""
+    if quant_kind == "int":
+        dtype = qd.types.quant.int(13, compute=qd.i32)
+        expected = qd.i32
+    elif quant_kind == "fixed":
+        dtype = qd.types.quant.fixed(16, compute=qd.f32)
+        expected = qd.f32
+    else:
+        dtype = qd.types.quant.float(exp=5, frac=10, compute=qd.f32)
+        expected = qd.f32
+
+    for matrix_type, dimensions in ((qd.Vector, (1,)), (qd.Matrix, (1, 1))):
+        field = matrix_type.field(*dimensions, dtype=dtype)
+        bitpack = qd.BitpackedFields(max_num_bits=32)
+        bitpack.place(field.get_scalar_field(0, 0))
+        qd.root.place(bitpack)
+        assert field[None].dtype == expected

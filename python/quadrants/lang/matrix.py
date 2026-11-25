@@ -42,6 +42,7 @@ from quadrants.lang.util import (
     quadrants_scope,
     to_numpy_type,
     to_pytorch_type,
+    to_quadrants_type,
     warning,
 )
 from quadrants.types import primitive_types
@@ -301,6 +302,18 @@ class Matrix(QuadrantsOperations):
                 UserWarning,
                 stacklevel=2,
             )
+
+    @property
+    def dtype(self) -> qd_python_core.DataTypeCxx:
+        """Return the element compute dtype without reading element values or calling to_numpy()."""
+        if not self.is_host_access:
+            return to_quadrants_type(self.entries.dtype)
+
+        entry = self.entries[0][0] if self.ndim == 2 else self.entries[0]
+        if isinstance(entry, SNodeHostAccess):
+            return entry.accessor.dtype
+
+        return entry.ndarr.dtype
 
     def get_shape(self):
         if self.ndim == 1:
