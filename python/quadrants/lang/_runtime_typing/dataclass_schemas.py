@@ -292,20 +292,17 @@ def _infer_dataclass_runtime_member_types(
     return member_types, needs_member_check, has_deferred_error
 
 
-def _create_dataclass_fields_with_inferred_types(
-    field_names_and_final: tuple[tuple[str, bool], ...],
-    member_types: "Sequence[InferredMemberType | DeferredMemberType | _SpecialForm]",
-) -> dict[str, dataclasses.Field[Any]]:
-    """Create schema fields from field names and inferred member types."""
-    fields: dict[str, dataclasses.Field[Any]] = {}
-    for (name, _), member_type in zip(field_names_and_final, member_types):
-        resolved = dataclasses.field()
-        resolved.name = name
-        resolved.type = member_type
-        # dataclasses.fields() includes only entries marked as normal fields.
-        resolved._field_type = _FIELD
-        fields[name] = resolved
-    return fields
+def _create_dataclass_field(
+    name: str,
+    member_type: "InferredMemberType | DeferredMemberType | _SpecialForm",
+) -> dataclasses.Field[Any]:
+    """Create a dataclass field with the given name and inferred type."""
+    field = dataclasses.field()
+    field.name = name
+    field.type = member_type
+    # dataclasses.fields() includes only entries marked as normal fields.
+    field._field_type = _FIELD
+    return field
 
 
 def cached_infer_dataclass_schema(
@@ -366,7 +363,10 @@ def cached_infer_dataclass_schema(
     if schema is None:
         # Revalidate py_objs on every uncached launch, but allocate field metadata only for a new inferred schema.
         # The field cache retains the dataclass type and field order; member types and stability come from inference.
-        fields = _create_dataclass_fields_with_inferred_types(field_names_and_final, member_types)
+        fields = {
+            name: _create_dataclass_field(name, member_type)
+            for (name, _), member_type in zip(field_names_and_final, member_types)
+        }
         schema = create_dataclass_schema(dataclass_type, fields, needs_member_check, has_deferred_error)
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
