@@ -1,5 +1,5 @@
 from functools import partial
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
@@ -24,10 +24,6 @@ from ._kernel_specialization_mapper_hotpath import (
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
 
-if TYPE_CHECKING:
-    from quadrants.lang.kernel import Kernel
-
-
 # Whether an arg of this class contributes to the args_hash ndarray-id walk in ``KernelSpecializationMapper.lookup``.
 # Only the
 # decision is per class; the paths themselves must stay per instance, since a @qd.data_oriented class can have a
@@ -51,32 +47,6 @@ def _classify_disposition(arg: Any) -> object:
 
 
 Key: TypeAlias = tuple[Any, ...]
-
-
-def prepare_specialization_signature(
-    mapper: "KernelSpecializationMapper",
-    raise_on_templated_floats: bool,
-    py_args: tuple[Any, ...],
-    runtime_kernel: "Kernel | None",
-    final_value_key_by_value_id: FinalValueKeyCache | None,
-    cache_disabled: bool,
-) -> tuple[Key, bool]:
-    """Combine argument and aliasing signatures; return (signature, cache_disabled)."""
-    nested_signatures, disable_identity_cache = prepare_dataclass_specialization_signatures(
-        raise_on_templated_floats,
-        py_args,
-        mapper.arguments,
-        mapper.template_slot_locations,
-        runtime_kernel,
-        final_value_key_by_value_id,
-    )
-    signature = (
-        mapper.extract(raise_on_templated_floats, py_args, final_value_key_by_value_id)
-        + (cached_get_container_alias_key(py_args),)
-        + nested_signatures
-    )
-    cache_disabled |= disable_identity_cache
-    return signature, cache_disabled
 
 
 def _destroy_callback(specialization_mapper_ref: ReferenceType["KernelSpecializationMapper"], ref: ReferenceType):
@@ -194,8 +164,19 @@ class KernelSpecializationMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        key, cache_disabled = prepare_specialization_signature(
-            self, raise_on_templated_floats, args, runtime_kernel, final_value_key_by_value_id, cache_disabled
+        nested_signatures, disable_identity_cache = prepare_dataclass_specialization_signatures(
+            raise_on_templated_floats,
+            args,
+            self.arguments,
+            self.template_slot_locations,
+            runtime_kernel,
+            final_value_key_by_value_id,
+        )
+        cache_disabled |= disable_identity_cache
+        key = (
+            self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+            + (cached_get_container_alias_key(args),)
+            + nested_signatures
         )
         try:
             count = self.mapping[key]
