@@ -8,6 +8,7 @@ import numpy as np
 
 from quadrants._tensor_wrapper import Tensor
 from quadrants.lang._ndarray import Ndarray
+from quadrants.lang._runtime_typing.types import DeferredMemberType
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.field import Field
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 
     from quadrants.lang._runtime_typing.types import (
         DataclassInstance,
-        DeferredMemberType,
         InferredMemberType,
         RuntimeDataclassSchema,
     )
@@ -44,6 +44,8 @@ class SchemaNeedingMemberChecks:
         for (name, is_final), member_type in zip(field_names_and_final, member_types):
             if is_final:
                 # Final values are still validated by specialization and launch handling; their declared type is fixed.
+                continue
+            if isinstance(member_type, DeferredMemberType):
                 continue
             child = getattr(value, name)
             if isinstance(child, Tensor):

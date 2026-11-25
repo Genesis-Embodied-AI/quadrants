@@ -108,7 +108,7 @@ def test_inferred_member_check_requirements() -> None:
         (UnsafeHash(Mutable(1)), True),
         (Mutable(1), True),
         (Frozen(Mutable(1)), True),
-        ([], True),
+        ([], False),
     ):
         _, needs_member_check = infer_member_type(py_obj, "state.value", frozenset())
         assert needs_member_check is expected, type(py_obj)
@@ -214,3 +214,38 @@ def test_instance_schema_cache_separates_debug_settings(monkeypatch: pytest.Monk
     entries = _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(state)
     assert entries is not None
     assert {debug for _, _, debug, _ in entries} == {False, True}
+
+
+@test_utils.test(arch=qd.cpu)
+def test_deferred_error_schemas_are_cached() -> None:
+    """Deferred errors permit schema reuse while mutable children still get checked."""
+
+    @dataclass
+    class Mutable:
+        value: object
+
+    @dataclass(frozen=True)
+    class State:
+        unsupported: object
+        other: object
+
+    state = State([], None)
+    schema = cached_infer_dataclass_schema(state, "state")
+    assert schema._qd_has_deferred_errors
+    assert not schema._qd_needs_member_check
+    entries = _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(state)
+    assert entries is not None
+    assert next(iter(entries.values())) is schema
+    state.unsupported.append(1)
+    assert cached_infer_dataclass_schema(state, "state") is schema
+
+    child = Mutable([])
+    guarded = State([], child)
+    first = cached_infer_dataclass_schema(guarded, "guarded")
+    entries = _schema_by_dataclass_instance_then_compiler_settings_and_ancestor_path.get(guarded)
+    assert entries is not None
+    entry = next(iter(entries.values()))
+    assert isinstance(entry, SchemaNeedingMemberChecks)
+    assert [name for name, _ in entry.member_guards] == ["other"]
+    child.value = 1
+    assert cached_infer_dataclass_schema(guarded, "guarded") is not first

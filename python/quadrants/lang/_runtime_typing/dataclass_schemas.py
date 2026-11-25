@@ -186,7 +186,7 @@ def infer_member_type(
                 "Store the dataclass on the data-oriented object instead.",
                 py_obj,
             ),
-            True,
+            False,
         )
 
     if py_obj is None:
@@ -244,7 +244,7 @@ def infer_member_type(
         create_deferred_member_type_for_invalid_dataclass_member(
             QuadrantsRuntimeTypeError, f"unsupported runtime type {type(py_obj).__name__}", py_obj
         ),
-        True,
+        False,
     )
 
 
@@ -289,8 +289,6 @@ def _infer_dataclass_runtime_member_types(
         elif is_runtime_dataclass_schema(member_type):
             has_deferred_error |= member_type._qd_has_deferred_errors
         member_types.append(member_type)
-    # Deferred-error schemas still bypass per-instance caching.
-    needs_member_check |= has_deferred_error
     return member_types, needs_member_check, has_deferred_error
 
 
@@ -364,12 +362,10 @@ def cached_infer_dataclass_schema(
         # Validate Final-bearing paths against the inferred nesting, including children annotated as Any/object.
         final_field_names(schema)
         _schema_by_dataclass_type_and_member_types[dataclass_type_and_member_types] = schema
-    # Guard reuse must not bypass deferred diagnostics or validation of Final-bearing paths.
+    # Deferred descriptions are reusable because debug is part of the instance-cache key.
+    # Final-bearing paths still require validation.
     if not needs_member_check or (
-        is_frozen_dataclass(dataclass_type)
-        and not has_deferred_error
-        and not has_final_fields
-        and non_frozen_ancestor_path is None
+        is_frozen_dataclass(dataclass_type) and not has_final_fields and non_frozen_ancestor_path is None
     ):
         if schema_by_compiler_settings_and_ancestor_path is None:
             schema_by_compiler_settings_and_ancestor_path = {}
