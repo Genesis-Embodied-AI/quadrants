@@ -1,6 +1,7 @@
 """Types shared by runtime dataclass processing."""
 
 import dataclasses
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import (
     Any,
@@ -151,3 +152,33 @@ class DeferredMemberError(NamedTuple):
             module, qualname = self.member_type.runtime_type_names
             message += f" (runtime type: {module}.{qualname})"
         raise self.member_type.error_type(message)
+
+
+class SchemaNeedingMemberChecks:
+    """Store member names and types, never child objects that could retain the owning dataclass."""
+
+    __slots__ = ("schema", "member_guards")
+
+    def __init__(
+        self,
+        schema: "type[RuntimeDataclassSchema]",
+        member_guards: "list[tuple[str, InferredMemberType | DeferredMemberType]]",
+    ) -> None:
+        """Store the member checks selected during runtime type inference."""
+        self.schema = schema
+        self.member_guards = member_guards
+
+    def do_member_check(
+        self,
+        dataclass_instance: "DataclassInstance",
+        path: str,
+        ancestor_ids: frozenset[int],
+        infer_member_type: "Callable[[Any, str, frozenset[int]], tuple[InferredMemberType | DeferredMemberType, bool]]",
+    ) -> bool:
+        """Check whether the current member types still match the cached schema."""
+        for name, member_type in self.member_guards:
+            child = getattr(dataclass_instance, name)
+            current_member_type, _ = infer_member_type(child, f"{path}.{name}", ancestor_ids)
+            if current_member_type is not member_type:
+                return False
+        return True

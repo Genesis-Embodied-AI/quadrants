@@ -23,9 +23,6 @@ from quadrants.lang._ndarray import Ndarray
 from quadrants.lang._runtime_typing.deferred_errors import (
     create_deferred_member_type_for_invalid_dataclass_member,
 )
-from quadrants.lang._runtime_typing.schema_member_checks import (
-    SchemaNeedingMemberChecks,
-)
 from quadrants.lang._runtime_typing.types import (
     DataclassInstance,
     DeferredMemberType,
@@ -33,6 +30,7 @@ from quadrants.lang._runtime_typing.types import (
     InferenceContextKey,
     InferredMemberType,
     RuntimeDataclassSchema,
+    SchemaNeedingMemberChecks,
     create_dataclass_schema,
     is_frozen_dataclass,
     is_runtime_dataclass_schema,

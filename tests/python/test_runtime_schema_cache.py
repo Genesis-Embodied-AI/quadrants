@@ -11,9 +11,7 @@ from quadrants.lang._runtime_typing.dataclass_schemas import (
     cached_infer_dataclass_schema,
     infer_member_type,
 )
-from quadrants.lang._runtime_typing.schema_member_checks import (
-    SchemaNeedingMemberChecks,
-)
+from quadrants.lang._runtime_typing.types import SchemaNeedingMemberChecks
 
 from tests.helpers import test_utils
 
