@@ -2,7 +2,9 @@
 
 from typing import TYPE_CHECKING, Any
 
-from quadrants.lang._kernel_specialization_mapper_hotpath import _extract_arg
+from quadrants.lang._kernel_specialization_mapper_hotpath import (
+    build_argument_specialization_signature,
+)
 from quadrants.lang._runtime_typing.dataclass_in_data_oriented import (
     collect_dataclass_schemas_in_data_oriented_args,
 )
@@ -64,7 +66,7 @@ def prepare_kernel_dataclass_args_for_mapper(
     return final_value_key_by_value_id
 
 
-def prepare_dataclass_specialization_signatures(
+def build_nested_dataclass_specialization_signatures(
     raise_on_templated_floats: bool,
     py_args: tuple[Any, ...],
     arg_metas: list[ArgMetadata],
@@ -93,7 +95,7 @@ def prepare_dataclass_specialization_signatures(
         (
             index,
             path,
-            _extract_arg(
+            build_argument_specialization_signature(
                 raise_on_templated_floats,
                 get_member_at_path(py_args[index], path),
                 schema,

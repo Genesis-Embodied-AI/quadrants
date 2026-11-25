@@ -4,7 +4,7 @@ from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
 from quadrants.lang._runtime_typing.specialization_signatures import (
-    prepare_dataclass_specialization_signatures,
+    build_nested_dataclass_specialization_signatures,
     prepare_kernel_dataclass_args_for_mapper,
 )
 from quadrants.lang._runtime_typing.types import FinalValueKeyCache
@@ -16,10 +16,10 @@ from quadrants.types import ndarray_type
 from .. import _warnings
 from ._container_aliases import cached_get_container_alias_key
 from ._kernel_specialization_mapper_hotpath import (
-    _extract_arg,
     _primitive_types,
     _struct_nd_paths_for,
     annotation_has_final_subtree,
+    build_argument_specialization_signature,
 )
 from ._kernel_types import ArgsHash
 from ._optional_annotation import OPTIONAL_ABSENT
@@ -72,19 +72,20 @@ class KernelSpecializationMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def extract(
+    def build_argument_specialization_signature(
         self,
         raise_on_templated_floats: bool,
         args: tuple[Any, ...],
         final_value_key_by_value_id: FinalValueKeyCache | None = None,
     ) -> Key:
-        # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
+        # Optional ndarray + None gets its own key: build_argument_specialization_signature's NdarrayType branch reads
+        # .shape and raises on None.
         return tuple(
             [
                 (
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                    else _extract_arg(
+                    else build_argument_specialization_signature(
                         raise_on_templated_floats,
                         arg,
                         kernel_arg.annotation,
@@ -148,7 +149,8 @@ class KernelSpecializationMapper:
                 nd_ids.append(id(v))
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
-        # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip ``extract()`` and
+        # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip
+        # ``build_argument_specialization_signature()`` and
         # its per-launch ``validate_value_for_final_field_and_get_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
@@ -164,7 +166,7 @@ class KernelSpecializationMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        nested_signatures, disable_identity_cache = prepare_dataclass_specialization_signatures(
+        nested_signatures, disable_identity_cache = build_nested_dataclass_specialization_signatures(
             raise_on_templated_floats,
             args,
             self.arguments,
@@ -174,7 +176,7 @@ class KernelSpecializationMapper:
         )
         cache_disabled |= disable_identity_cache
         key = (
-            self.extract(raise_on_templated_floats, args, final_value_key_by_value_id)
+            self.build_argument_specialization_signature(raise_on_templated_floats, args, final_value_key_by_value_id)
             + (cached_get_container_alias_key(args),)
             + nested_signatures
         )
