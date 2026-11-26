@@ -200,7 +200,8 @@ def test_data_oriented_ndarray_reassign_same_shape():
 
 # ---------------------------------------------------------------------------
 # 7. Mutation cross-shape: reassign ndarray attribute to a *different-dtype* ndarray. The template-mapper specialization
-#    signature (in ``_template_mapper_hotpath._extract_arg``) returns ``weakref.ref(arg)`` for
+#    signature (in ``_kernel_specialization_mapper_hotpath._build_argument_specialization_signature``) returns
+# ``weakref.ref(arg)`` for
 #    ``is_data_oriented(arg)``; it does NOT descend into ndarray children to compute a dtype/ndim-dependent
 #    specialization signature. So a reassignment to a different dtype on an unchanged instance id must still
 #    re-specialise.
@@ -1333,7 +1334,8 @@ def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_
 # ---------------------------------------------------------------------------
 # 23. @qd.data_oriented holding a qd.Tensor wrapper around an ndarray.
 #
-# Both ``_build_struct_nd_paths`` and ``_collect_struct_nd_descriptors`` in ``_template_mapper_hotpath.py`` have an ``if
+# Both ``_build_struct_nd_paths`` and ``_collect_struct_nd_descriptors`` in ``_kernel_specialization_mapper_hotpath.py``
+# have an ``if
 # type(v) in _TENSOR_WRAPPER_TYPES: v = v._unwrap()`` branch that the rest of the file doesn't exercise (every other test
 # attaches a bare ``qd.ndarray``). This test covers that unwrap path for the ndarray-backed wrapper: the struct-walker
 # should treat ``state.a`` as if it were a bare ndarray (paths cached on the class, shape descriptors collected from the

@@ -38,7 +38,8 @@ __all__ = [
 ]
 
 
-# PERF-CRITICAL: This flag is checked on every kernel arg in _template_mapper_hotpath._extract_arg,
+# PERF-CRITICAL: This flag is checked on every kernel arg in
+# _kernel_specialization_mapper_hotpath._build_argument_specialization_signature,
 # kernel.Kernel.__call__, _func_base._inject_template_globals, and args_hasher.stringify_obj_type.
 # It gates the isinstance(arg, Tensor) unwrap so that programs which never construct a qd.Tensor pay zero Python
 # overhead for the check. Removing this flag or the guards that read it causes a measurable ~4% CPU regression on
@@ -63,7 +64,7 @@ class Tensor:
     double-wrapping: the impl must be a bare ``Ndarray`` or ``Field``.
 
     Doubles as a kernel parameter annotation: ``def k(x: qd.Tensor)`` accepts either a Field or an Ndarray; dispatch
-    happens at extract time. See ``_template_mapper_hotpath._extract_arg``.
+    happens at extract time. See ``_kernel_specialization_mapper_hotpath._build_argument_specialization_signature``.
     """
 
     # ``cached_property`` requires ``__dict__``, so no ``__slots__``.

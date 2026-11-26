@@ -235,7 +235,7 @@ def dataclass_to_repr(
     if is_data_oriented(arg):
         raise TypeError("A class cannot be both a Python dataclass and data-oriented.")
     # PERF: a frozen dataclass's repr never changes, so cache it on the instance (``dataclasses.fields()`` is slow, see
-    # the _template_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
+    # the _kernel_specialization_mapper_hotpath.py module docstring). ``_DC_REPR_NONE`` caches a failure verdict.
     #
     # Hash the *declared* type's fields (``annotated_type``, when given) rather than the runtime subclass's, so a
     # subclass carrying extra app-only fields still fast-caches on the base's field set. Only the runtime type's own

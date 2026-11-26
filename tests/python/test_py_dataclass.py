@@ -1235,17 +1235,22 @@ def test_substruct_deep_nesting() -> None:
 
 @pytest.mark.parametrize("use_slots", [False, True])
 @test_utils.test()
-def test_template_mapper_cache(use_slots, monkeypatch):
-    # Mock '_extract_arg' to track the number of (recursive) calls
+def test_kernel_specialization_mapper_cache(use_slots, monkeypatch):
+    # Mock '_build_argument_specialization_signature' to track the number of (recursive) calls
     counter = 0
-    _extract_arg_orig = qd.lang._template_mapper_hotpath._extract_arg
+    _build_argument_specialization_signature_orig = (
+        qd.lang._kernel_specialization_mapper_hotpath._build_argument_specialization_signature
+    )
 
-    def _extract_arg(*args, **kwargs):
+    def _build_argument_specialization_signature(*args, **kwargs):
         nonlocal counter
         counter += 1
-        return _extract_arg_orig(*args, **kwargs)
+        return _build_argument_specialization_signature_orig(*args, **kwargs)
 
-    monkeypatch.setattr("quadrants.lang._template_mapper_hotpath._extract_arg", _extract_arg)
+    monkeypatch.setattr(
+        "quadrants.lang._kernel_specialization_mapper_hotpath._build_argument_specialization_signature",
+        _build_argument_specialization_signature,
+    )
 
     @dataclass(frozen=True, slots=use_slots)
     class MyStruct:
@@ -3459,7 +3464,7 @@ def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
 # ``@dataclasses.dataclass`` config as ``typing.Final[T]`` to signal that the field's value must be baked as a
 # compile-time constant. Unlike ``@qd.data_oriented`` + ``qd.Template`` for static configs, this does not require
 # opting the whole class into the data_oriented machinery or paying the associated per-launch overhead in
-# ``_class_needs_ndarray_member_walk`` in ``TemplateMapper.lookup``.
+# ``_class_needs_ndarray_member_walk`` in ``KernelSpecializationMapper.lookup``.
 #
 # Semantics:
 # - ``config.field`` accessed inside a kernel body resolves at AST-build time to the actual Python value baked into
@@ -3560,7 +3565,7 @@ def test_final_and_non_final_fields_mix():
 @test_utils.test()
 def test_final_field_identical_values_share_compiled_kernel():
     """Kernel caching correctness: two ``SimConfig`` instances with the same Final-field value must reuse the same
-    compiled kernel. Two consecutive launches with equal Final values keep ``template_mapper.mapping`` size at 1; a
+    compiled kernel. Two consecutive launches with equal Final values keep ``mapper.mapping`` size at 1; a
     third launch with a different value grows it to 2. Guards against accidentally hashing the *instance* rather than
     the *value* in the specialization signature.
     """
@@ -3744,7 +3749,8 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
     """Every dataclass on the path down to a ``Final`` leaf must be non-reassignable, not just its direct carrier.
 
     A frozen ``Inner`` holding ``n: Final[int]`` protects ``inner.n``, but a mutable ``Outer`` holding ``child: Inner``
-    still allows ``outer.child = Inner(n=9)``. ``TemplateMapper.lookup`` memoises the specialisation on the top-level
+    still allows ``outer.child = Inner(n=9)``. ``KernelSpecializationMapper.lookup`` memoises the specialisation on the
+    top-level
     ``id(arg)``, so re-launching with that same ``outer`` would silently reuse the kernel compiled with the previous
     child's baked constant and produce results for the old value. Reject the mutable ancestor instead."""
     from typing import Final
@@ -4003,7 +4009,8 @@ def test_final_float_field_honors_raise_on_templated_floats():
     the same way a ``qd.Template`` float does.
 
     Note this is deliberately *stricter* than the ``@qd.data_oriented`` pattern ``Final`` replaces: a float member of
-    a data_oriented template arg currently bypasses the guard, because ``_extract_arg``'s data_oriented branch returns
+    a data_oriented template arg currently bypasses the guard, because ``_build_argument_specialization_signature``'s
+    data_oriented branch returns
     ``weakref.ref(arg)`` before reaching the float check. That gap is pre-existing and out of scope here; the point of
     this test is that the new annotation does not inherit it."""
     from typing import Final
@@ -5453,7 +5460,8 @@ def test_final_enum_key_incorporates_full_member_map():
 
 @test_utils.test()
 def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
-    """``TemplateMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior result for the
+    """``KernelSpecializationMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior
+    result for the
     same live argument *before* calling ``extract()``. For a Final-bearing argument that would bypass
     ``final_scalar_key``'s per-launch revalidation - so a launch could reuse the specialization compiled before a
     ``Final`` value's class was monkey-patched behaviorful. This cache is therefore disabled for any mapper carrying a
@@ -5462,14 +5470,14 @@ def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
     import enum
     from typing import Final
 
-    from quadrants.lang._template_mapper import TemplateMapper
+    from quadrants.lang._kernel_specialization_mapper import KernelSpecializationMapper
     from quadrants.lang.kernel_arguments import ArgMetadata
 
     @dataclass(frozen=True)
     class Plain:
         a: int
 
-    plain_mapper = TemplateMapper([ArgMetadata(Plain, "p")], [])
+    plain_mapper = KernelSpecializationMapper([ArgMetadata(Plain, "p")], [])
     p = Plain(a=1)
     plain_mapper.lookup(False, (p,))
     plain_mapper.lookup(False, (p,))
@@ -5483,7 +5491,7 @@ def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
     class Cfg:
         mode: Final[Mode]
 
-    final_mapper = TemplateMapper([ArgMetadata(Cfg, "cfg")], [])
+    final_mapper = KernelSpecializationMapper([ArgMetadata(Cfg, "cfg")], [])
     cfg = Cfg(mode=Mode.A)
     final_mapper.lookup(False, (cfg,))  # clean enum accepted on the first launch
     assert not final_mapper._mapping_cache, "a Final-bearing mapper must not populate the instance-keyed cache"

@@ -215,6 +215,6 @@ def test_struct_wrapper_field_shares_cache_with_bare():
     assert n_after_wrapped == n_after_bare, (
         f"struct-field cache fragmented: {n_after_bare} entries with bare "
         f"impl, {n_after_wrapped} with wrapper. The in-struct unwrap in "
-        f"_template_mapper_hotpath._extract_arg must run before id-based "
+        f"_kernel_specialization_mapper_hotpath._build_argument_specialization_signature must run before id-based "
         f"keying."
     )
