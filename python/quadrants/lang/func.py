@@ -74,10 +74,10 @@ class Func(FuncBase):
         if self.is_real_function:
             if current_kernel.autodiff_mode != _NONE:
                 raise QuadrantsSyntaxError("Real function in gradient kernels unsupported.")
-            instance_id, arg_features = self.mapper.lookup(impl.current_cfg().raise_on_templated_floats, py_args)
+            instance_id, arg_spec_sigs = self.mapper.lookup(impl.current_cfg().raise_on_templated_floats, py_args)
             key = FunctionKey(self.func.__name__, self.func_id, instance_id)
             if key.instance_id not in self.compiled:
-                self.do_compile(key=key, args=py_args, arg_features=arg_features)
+                self.do_compile(key=key, args=py_args, arg_spec_sigs=arg_spec_sigs)
             return self.func_call_rvalue(key=key, args=py_args)
         tree, ctx = self.get_tree_and_ctx(
             is_kernel=False,
@@ -135,14 +135,14 @@ class Func(FuncBase):
             return ret[0]
         return tuple(ret)
 
-    def do_compile(self, key: FunctionKey, args: tuple[Any, ...], arg_features: tuple[Any, ...]) -> None:
+    def do_compile(self, key: FunctionKey, args: tuple[Any, ...], arg_spec_sigs: tuple[Any, ...]) -> None:
         """
         only for real func
         """
         tree, ctx = self.get_tree_and_ctx(
             is_kernel=False,
             py_args=args,
-            arg_features=arg_features,
+            arg_spec_sigs=arg_spec_sigs,
             is_real_function=self.is_real_function,
         )
         fn = impl.get_runtime().prog.create_function(key)
