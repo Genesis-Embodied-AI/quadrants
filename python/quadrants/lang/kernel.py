@@ -42,6 +42,7 @@ from quadrants.lang import impl, runtime_ops
 from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._fast_caching.args_hasher import LaunchArgSchemas
+from quadrants.lang._kernel_specialization_mapper import KernelSpecializationMapper
 from quadrants.lang._kernel_specialization_mapper_hotpath import (
     chain_has_mutable_container,
 )
@@ -397,6 +398,7 @@ class Kernel(FuncBase):
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list[tuple[int, tuple[str, ...]]] = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
+        impl.on_reset(self._on_reset)
 
     def ast_builder(self) -> ASTBuilder:
         assert self.kernel_cpp is not None
@@ -409,6 +411,22 @@ class Kernel(FuncBase):
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
+
+    def _on_reset(self) -> None:
+        """Release cached arguments and launch metadata when the runtime publishes a reset."""
+        # Specialization identifiers restart with the mapper; discard their launch metadata together.
+        self.mapper = KernelSpecializationMapper(self.arg_metas, self.template_slot_locations)
+        self.kernel_cpp = None
+        self._last_launch_key = None
+        self.used_py_dataclass_parameters_by_key_enforcing.clear()
+        self._struct_ndarray_launch_info_by_key.clear()
+        self._launch_infos_for_root_dataclasses_in_data_oriented_by_key.clear()
+        self._runtime_scalar_launch_infos_by_compiled_kernel_key.clear()
+        self._mutable_nd_cached_key = None
+        self._mutable_nd_cached_val = []
+        self._tensor_unwrap_indices = None
+        self.launch_context_buffer_cache = LaunchContextBufferCache()
+        self.launch_observations = LaunchObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
         """Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over
