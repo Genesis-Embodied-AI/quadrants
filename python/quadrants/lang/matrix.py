@@ -40,6 +40,7 @@ from quadrants.lang.util import (
     quadrants_scope,
     to_numpy_type,
     to_pytorch_type,
+    to_quadrants_type,
     warning,
 )
 from quadrants.types import primitive_types
@@ -222,6 +223,8 @@ class Matrix(QuadrantsOperations):
 
     Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.
 
+    Runtime type inference assumes the shape and recorded ``dtype`` remain fixed when element values change.
+
     Args:
         arr (Union[list, tuple, np.ndarray]): the initial values of a matrix.
         dt (:mod:`~quadrants.types.primitive_types`): the element data type.
@@ -265,7 +268,7 @@ class Matrix(QuadrantsOperations):
         if len(arr) == 0:
             self.ndim = 0
             self.n, self.m = 0, 0
-            self._entries = np.array([])
+            self._entries = np.array(arr, None if dt is None else to_numpy_type(dt))
             self.is_host_access = False
         elif isinstance(arr[0], Matrix):
             raise Exception("cols/rows required when using list of vectors")
@@ -288,6 +291,15 @@ class Matrix(QuadrantsOperations):
                 self._entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
+        if self.is_host_access:
+            first_accessor = self._accessors[0][0] if self.ndim == 2 else self._accessors[0]
+            if isinstance(first_accessor, SNodeHostAccess):
+                self._dtype = first_accessor.accessor.dtype
+            else:
+                self._dtype = first_accessor.ndarr.dtype
+        else:
+            self._dtype = to_quadrants_type(self._entries.dtype)
+
         if self.n * self.m > 144:
             warning(
                 f"Quadrants matrices/vectors with {self.n}x{self.m} > 144 entries are not suggested."
@@ -300,6 +312,11 @@ class Matrix(QuadrantsOperations):
                 UserWarning,
                 stacklevel=2,
             )
+
+    @property
+    def dtype(self) -> qd_python_core.DataTypeCxx:
+        """Return the element compute dtype without reading element values or calling to_numpy()."""
+        return self._dtype
 
     def get_shape(self):
         if self.ndim == 1:
@@ -1194,6 +1211,11 @@ class Matrix(QuadrantsOperations):
 
 
 class Vector(Matrix):
+    """A vector of scalar elements.
+
+    Runtime type inference assumes the shape and recorded ``dtype`` remain fixed when element values change.
+    """
+
     def __init__(self, arr, dt=None, **kwargs):
         """Constructs a vector from given array.
 

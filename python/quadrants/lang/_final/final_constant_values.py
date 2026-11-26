@@ -1,7 +1,7 @@
 """Validate Final constant values and construct their specialization signatures."""
 
 import enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from quadrants.lang._final.final_class_identity import (
     _is_supported_builtin_scalar_type,
@@ -10,6 +10,11 @@ from quadrants.lang._final.final_class_identity import (
     _unpack_u64,
 )
 from quadrants.lang._final.final_enum_validation import _reject_stateful_enum_member
+
+if TYPE_CHECKING:
+    from quadrants.lang._runtime_typing.types import (
+        FinalValueSpecializationSignatureCache,
+    )
 
 # Separate constants that Python considers equal, such as True, 1, and an IntEnum member.
 _FLOAT_KEY_TAG = "f64"
@@ -25,10 +30,14 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
         return ()
-    return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
+    return tuple(
+        (name, validate_value_for_final_field_and_get_key(member.value, live)) for name, member in member_map.items()
+    )
 
 
-def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
+# FIXME: Cache enum validation and specialization signatures under the documented immutability assumption.
+# Benchmark this before migrating frequently used Genesis Config objects to dataclass Final fields.
+def validate_value_for_final_field_and_get_key(value: Any, live: bool = False) -> tuple[Any, ...]:
     """Validate a Final value and build its specialization signature.
 
     Keep distinct constants separate even when Python considers them equal, such as True and 1 or an IntEnum member and
@@ -46,7 +55,7 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
             _ENUM_KEY_TAG,
             *_subclass_identity(cls, live),
             value.name,
-            final_scalar_key(value.value, live),
+            validate_value_for_final_field_and_get_key(value.value, live),
             _enum_member_map_key(cls, live),
         )
     cls = type(value)
@@ -57,3 +66,20 @@ def final_scalar_key(value: Any, live: bool = False) -> tuple[Any, ...]:
             "Custom scalar subclasses and NumPy scalars are not supported."
         )
     return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)
+
+
+def cached_get_final_value_specialization_signature(
+    value: object, final_value_specialization_signature_by_value_id: "FinalValueSpecializationSignatureCache | None"
+) -> tuple[Any, ...]:
+    """Return a cached Final-value specialization signature, or validate, build, and cache it for this kernel call."""
+    cached = (
+        final_value_specialization_signature_by_value_id.get(id(value))
+        if final_value_specialization_signature_by_value_id is not None
+        else None
+    )
+    if cached is not None and cached[0] is value:
+        return cached[1]
+    specialization_signature = validate_value_for_final_field_and_get_key(value, live=True)
+    if final_value_specialization_signature_by_value_id is not None:
+        final_value_specialization_signature_by_value_id[id(value)] = (value, specialization_signature)
+    return specialization_signature

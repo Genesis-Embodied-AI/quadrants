@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Final
 
+import numpy as np
 import pytest
 
 import quadrants as qd
@@ -47,7 +48,7 @@ def test_nested_scalar_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(require=qd.extension.data64)
 def test_dataclass_preserves_i64(in_data_oriented: bool) -> None:
-    """A dataclass scalar keeps its declared 64-bit width through either argument route."""
+    """A dataclass scalar keeps its runtime 64-bit width through either argument route."""
 
     @dataclass
     class State:
@@ -66,19 +67,19 @@ def test_dataclass_preserves_i64(in_data_oriented: bool) -> None:
             return arg.state.value
         return arg.value
 
-    state = State(2**33)
+    state = State(np.int64(2**33))
     assert read(DataOriented(state) if in_data_oriented else state) == 2**33
 
 
 @pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(arch=qd.cpu)
 def test_dataclass_scalar_static_constants(in_data_oriented: bool) -> None:
-    """Final and Template members remain compile-time constants through either argument route."""
+    """Final members remain compile-time constants through either argument route."""
 
     @dataclass(frozen=True)
     class State:
         count: Final[int]
-        enabled: qd.Template
+        enabled: Final[bool]
         value: float
 
     @qd.data_oriented
@@ -196,10 +197,10 @@ def test_direct_dataclasses_and_dataclasses_in_data_oriented_share_binding(share
 
     array = qd.ndarray(qd.i64, shape=1)
     array[0] = 5
-    first = State(0, Child(2**33, array))
-    data_oriented_obj = DataOriented(State(1, first.child if shared else Child(7, array)))
+    first = State(0, Child(np.int64(2**33), array))
+    data_oriented_obj = DataOriented(State(1, first.child if shared else Child(np.int64(7), array)))
     for count in (9, 11):
-        data_oriented_obj.state.child.count = count
+        data_oriented_obj.state.child.count = np.int64(count)
         assert read(first, data_oriented_obj, 13) == first.child.count + count + 20
         data_oriented_obj.offset += 1
         array[0] -= 1
@@ -209,7 +210,7 @@ def test_direct_dataclasses_and_dataclasses_in_data_oriented_share_binding(share
 @pytest.mark.parametrize("frozen,unsafe_hash", [(False, False), (True, False), (False, True)])
 @test_utils.test(arch=qd.cpu)
 def test_dataclass_launch_cache(in_data_oriented: bool, frozen: bool, unsafe_hash: bool) -> None:
-    """Mutable dataclasses read live scalars; frozen and unsafe_hash dataclasses reuse cached launches."""
+    """Mutable dataclasses read live scalars; frozen dataclasses reuse cached launches."""
 
     @dataclass(frozen=frozen, unsafe_hash=unsafe_hash)
     class State:
@@ -233,7 +234,7 @@ def test_dataclass_launch_cache(in_data_oriented: bool, frozen: bool, unsafe_has
     arg = DataOriented(state) if in_data_oriented else state
     state.array[0] = 2
     assert read(arg) == 5
-    immutable = frozen or unsafe_hash
+    immutable = frozen
     assert bool(read._primal.launch_context_buffer_cache._launch_ctx_cache) is immutable
     state.array[0] = 7
     if not immutable:

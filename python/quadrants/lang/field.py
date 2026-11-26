@@ -751,6 +751,7 @@ class ScalarField(Field):
 
 class SNodeHostAccessor:
     def __init__(self, snode):
+        self.dtype = snode.data_type().get_compute_type()
         if _qd_core.is_real(snode.data_type()):
             write_func = snode.write_float
             read_func = snode.read_float

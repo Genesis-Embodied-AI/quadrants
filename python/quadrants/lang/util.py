@@ -3,7 +3,7 @@ import os
 import traceback
 import types
 import warnings
-from typing import Any
+from typing import Any, ClassVar, Protocol, TypeGuard
 
 import numpy as np
 from colorama import Fore, Style
@@ -29,6 +29,13 @@ from quadrants.types.primitive_types import (
 )
 
 MAP_TYPE_IDS = {id(dtype): dtype for dtype in all_types}
+
+
+def get_member_at_path(py_obj: Any, path: tuple[str, ...]) -> Any:
+    """Follow the attribute names in path and return the resulting object."""
+    for name in path:
+        py_obj = getattr(py_obj, name)
+    return py_obj
 
 
 def has_pytorch():
@@ -326,7 +333,13 @@ def get_traceback(stacklevel=1):
     return "".join(traceback.format_list(s))
 
 
-def is_data_oriented(obj: Any) -> bool:
+class DataOriented(Protocol):
+    """An instance whose class carries the data-oriented marker."""
+
+    _data_oriented: ClassVar[bool]
+
+
+def is_data_oriented(obj: object) -> TypeGuard[DataOriented]:
     """Check whether the object's class inherits the data-oriented marker.
 
     Class dictionaries bypass metaclass attribute hooks, which can recurse indefinitely on Genesis's Pydantic objects.

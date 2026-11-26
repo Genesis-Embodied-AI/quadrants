@@ -4,6 +4,9 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._fast_caching.args_hasher import _FAIL_FASTCACHE, dataclass_to_repr
+from quadrants.lang._runtime_typing.dataclass_schemas import (
+    cached_infer_dataclass_schema,
+)
 
 from tests.helpers import test_utils
 
@@ -13,8 +16,9 @@ from tests.helpers import test_utils
 def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
     """Reject access to a data-oriented object stored inside a dataclass, from either a kernel or qd.func.
 
-    owner.state is allowed: a dataclass inside a data-oriented object. Accessing owner.state.inner is forbidden: inner
-    is data-oriented inside a dataclass, a nesting that can cause incorrect cached-kernel reuse.
+    data_oriented_obj.state is allowed: a dataclass inside a data-oriented object. Accessing
+    data_oriented_obj.state.inner is forbidden: inner is data-oriented inside a dataclass, a nesting that can cause
+    incorrect cached-kernel reuse.
     """
 
     @qd.data_oriented
@@ -27,7 +31,7 @@ def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
         inner: qd.Template
 
     @qd.data_oriented
-    class Owner:
+    class DataOriented:
         def __init__(self, state: State) -> None:
             self.state = state
 
@@ -36,14 +40,14 @@ def test_data_oriented_dataclass_member_rejected(via_func: bool) -> None:
         return qd.static(state.inner.count)
 
     @qd.kernel(fastcache=True)
-    def read(owner: qd.Template, use_func: qd.Template) -> qd.i32:
+    def read(data_oriented_obj: qd.Template, use_func: qd.Template) -> qd.i32:
         if qd.static(use_func):
-            return read_member(owner.state)
+            return read_member(data_oriented_obj.state)
         else:
-            return qd.static(owner.state.inner.count)
+            return qd.static(data_oriented_obj.state.inner.count)
 
     with pytest.raises(Exception, match="Data-oriented objects inside Python dataclass"):
-        read(Owner(State(Inner())), via_func)
+        read(DataOriented(State(Inner())), via_func)
 
 
 @test_utils.test(arch=qd.cpu)
@@ -58,7 +62,9 @@ def test_data_oriented_dataclass_member_disables_artifact_lookup() -> None:
     class State:
         inner: qd.Template
 
-    assert dataclass_to_repr(False, ("0",), State(Inner())) is _FAIL_FASTCACHE
+    state = State(Inner())
+    schema = cached_infer_dataclass_schema(state, "state")
+    assert dataclass_to_repr(False, ("0",), state, schema) is _FAIL_FASTCACHE
 
 
 @pytest.mark.parametrize("in_data_oriented", [False, True])

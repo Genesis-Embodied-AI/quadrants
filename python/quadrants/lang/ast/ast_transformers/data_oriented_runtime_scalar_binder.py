@@ -1,6 +1,7 @@
 # type: ignore
 """Discover dataclass roots and bind opted-in data-oriented runtime scalars."""
 
+import dataclasses
 from typing import Any, NamedTuple
 
 from quadrants._lib import core as _qd_core
@@ -8,6 +9,7 @@ from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang import expr, impl
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
+    KernelCompilePassContext,
     MemberBinding,
 )
 from quadrants.lang.kernel_arguments import ArgMetadata
@@ -83,7 +85,7 @@ def collect_runtime_members_from_data_oriented_args(
     py_args: tuple[Any, ...], arg_metas: list[ArgMetadata]
 ) -> tuple[list[_ScalarMember], list[tuple[int, tuple[str, ...], Any]]]:
     """Return runtime scalars and dataclass roots found beneath data-oriented arguments."""
-    owners: list[tuple[int, Any]] = []
+    data_oriented_args: list[tuple[int, Any]] = []
     for i, arg_meta in enumerate(arg_metas):
         anno = arg_meta.annotation
         is_template = anno is annotations.template or isinstance(anno, annotations.template)
@@ -94,11 +96,11 @@ def collect_runtime_members_from_data_oriented_args(
         if isinstance(val, _TensorClass):
             val = val._unwrap()
         if is_data_oriented(val):
-            owners.append((i, val))
+            data_oriented_args.append((i, val))
 
     scalar_members: list[_ScalarMember] = []
     dataclass_members: list[tuple[int, tuple[str, ...], Any]] = []
-    for arg_idx, val in owners:
+    for arg_idx, val in data_oriented_args:
         _collect_runtime_members_in_data_oriented(
             val, arg_idx, (), set(), scalar_members, uses_template_primitives(val), dataclass_members
         )
@@ -154,3 +156,27 @@ def bind_data_oriented_runtime_scalars(func_ctx: FuncCompilePassContext, scalar_
         )
         bindings[key] = MemberBinding(flat_name, dtype, value_expr, reject_in_static_scope=True)
         runtime_scalar_launch_infos.append((arg_id[0], arg_idx, attr_chain, kind))
+
+
+def register_runtime_dataclass_schema(pass_ctx: KernelCompilePassContext, obj: Any, schema: type, name: str) -> None:
+    """Index stored dataclasses and their inferred member types for this pass."""
+    if id(obj) in pass_ctx.runtime_schema_by_id:
+        return
+    pass_ctx.runtime_schema_by_id[id(obj)] = (schema, name)
+    for field in dataclasses.fields(schema):
+        if dataclasses.is_dataclass(field.type):
+            register_runtime_dataclass_schema(pass_ctx, getattr(obj, field.name), field.type, f"{name}.{field.name}")
+
+
+def register_runtime_dataclass_schemas(func_ctx: FuncCompilePassContext) -> None:
+    """Register inferred schemas and stored attribute paths for this compilation pass."""
+    assert func_ctx.py_args is not None
+    pass_ctx = func_ctx.kernel_compile_context.current_pass
+    for index, path, schema in func_ctx.func._launch_arg_schemas:
+        obj = func_ctx.py_args[index]
+        name = func_ctx.func.arg_metas[index].name
+        for attr in path:
+            pass_ctx.runtime_dataclass_members.add((id(obj), attr))
+            obj = getattr(obj, attr)
+            name += "." + attr
+        register_runtime_dataclass_schema(pass_ctx, obj, schema, name)

@@ -3,6 +3,11 @@ from typing import Any, TypeAlias
 from weakref import ReferenceType, WeakKeyDictionary
 
 from quadrants.lang import impl
+from quadrants.lang._runtime_typing.specialization_signatures import (
+    build_nested_dataclass_specialization_signatures,
+    prepare_kernel_dataclass_args_for_mapper,
+)
+from quadrants.lang._runtime_typing.types import FinalValueSpecializationSignatureCache
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
@@ -67,7 +72,12 @@ class KernelSpecializationMapper:
         # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
-    def build_arguments_specialization_signature(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+    def build_arguments_specialization_signature(
+        self,
+        raise_on_templated_floats: bool,
+        args: tuple[Any, ...],
+        final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
+    ) -> Key:
         # Optional ndarray + None gets its own key: _build_argument_specialization_signature's NdarrayType branch reads
         # .shape and raises on None.
         return tuple(
@@ -76,14 +86,24 @@ class KernelSpecializationMapper:
                     OPTIONAL_ABSENT
                     if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
                     else _build_argument_specialization_signature(
-                        raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name
+                        raise_on_templated_floats,
+                        arg,
+                        kernel_arg.annotation,
+                        kernel_arg.name,
+                        final_value_specialization_signature_by_value_id,
                     )
                 )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )
 
-    def lookup(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> tuple[int, Key]:
+    def lookup(
+        self,
+        raise_on_templated_floats: bool,
+        args: tuple[Any, ...],
+        final_value_specialization_signature_by_value_id: FinalValueSpecializationSignatureCache | None = None,
+        runtime_kernel=None,
+    ) -> tuple[int, Key]:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
@@ -98,21 +118,15 @@ class KernelSpecializationMapper:
             prog = self._prog_weakref()
         assert prog is not None
 
-        # Note that it is not necessary to handle primitive types separately here because primitive types are
-        # immutable and therefore identical primitive values usually reuse the same addresses for efficiency unless
-        # extra effort is made to do otherwise (this behavior is referring to as "interning"). Avoiding special
-        # branching for primitive types dramatically improve performance of hash computation.
+        # Use argument identities for the shortcut cache; misses fall back to the full specialization signature.
         mapping_cache_tracker: list[ReferenceType | None] | None = None
         args_hash: ArgsHash = tuple([id(arg) for arg in args])
-        # A ``@qd.data_oriented`` container's member ndarrays can be reassigned between calls on the same instance
-        # (``state.x = other_ndarray``), which ``id(arg)`` cannot see, so the specialization signature cache would serve
-        # an entry compiled for the old dtype/ndim. Fold the reachable ndarray ids in as well.
-        #
-        # Only ``template_slot_locations`` is iterated: a data_oriented container can only appear at a ``qd.template()``
-        # position (a typed-dataclass arg carries a dataclass type, and data_oriented classes are never dataclasses).
-        #
-        # PERF: the ``arg.__dict__["_qd_nd_paths"]`` lookup is inlined rather than left to ``_struct_nd_paths_for``,
-        # which costs ~60ns/call at 4 template args - ~15% of this loop. The call remains for the cold-miss cases.
+        if runtime_kernel is not None:
+            final_value_specialization_signature_by_value_id = prepare_kernel_dataclass_args_for_mapper(
+                runtime_kernel, args, args_hash
+            )
+        # Include array-member identities so replacing an array cannot reuse a mapping for its previous dtype or rank.
+        # Search template arguments, which include data-oriented objects.
         nd_ids: list = []
         for i in self.template_slot_locations:
             arg = args[i]
@@ -123,6 +137,7 @@ class KernelSpecializationMapper:
                 _class_needs_ndarray_member_walk[cls] = disposition
             if disposition is _SKIP:
                 continue
+            # PERF: Inline the cached-path lookup to avoid a helper call on each launch.
             try:
                 paths = arg.__dict__["_qd_nd_paths"]
             except (AttributeError, KeyError):
@@ -138,7 +153,7 @@ class KernelSpecializationMapper:
             args_hash = args_hash + tuple(nd_ids)
         # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip
         # ``build_arguments_specialization_signature()`` and
-        # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
+        # its per-launch ``validate_value_for_final_field_and_get_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
             cache_disabled = self._mapping_cache_disabled = any(
@@ -153,8 +168,24 @@ class KernelSpecializationMapper:
             if mapping_cache_tracker:
                 return self._mapping_cache[args_hash]
 
-        alias_key = cached_get_container_alias_key(args)
-        key = self.build_arguments_specialization_signature(raise_on_templated_floats, args) + (alias_key,)
+        nested_signatures = build_nested_dataclass_specialization_signatures(
+            raise_on_templated_floats,
+            args,
+            self.arguments,
+            self.template_slot_locations,
+            runtime_kernel,
+            final_value_specialization_signature_by_value_id,
+        )
+        # This cache uses argument identities. A nested dataclass member can change type while the containing
+        # data-oriented argument keeps the same identity.
+        cache_disabled |= bool(nested_signatures)
+        key = (
+            self.build_arguments_specialization_signature(
+                raise_on_templated_floats, args, final_value_specialization_signature_by_value_id
+            )
+            + (cached_get_container_alias_key(args),)
+            + nested_signatures
+        )
         try:
             count = self.mapping[key]
         except KeyError:

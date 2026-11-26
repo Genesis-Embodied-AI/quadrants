@@ -5,6 +5,7 @@ import os
 import pathlib
 import subprocess
 import sys
+from typing import Final
 
 import numpy as np
 import pydantic
@@ -533,12 +534,12 @@ def test_nested_scalar_cross_argument_alias(tmp_path: pathlib.Path, in_data_orie
 
 @pytest.mark.parametrize("in_data_oriented", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_src_ll_cache_distinguishes_dataclass_template_values(tmp_path: pathlib.Path, in_data_oriented: bool) -> None:
-    """Changing a dataclass Template value must select a different disk-cache entry."""
+def test_src_ll_cache_distinguishes_dataclass_final_values(tmp_path: pathlib.Path, in_data_oriented: bool) -> None:
+    """Changing a dataclass Final value must select a different disk-cache entry."""
 
     @dataclasses.dataclass(frozen=True)
     class Config:
-        count: qd.Template
+        count: Final[int]
 
     @qd.data_oriented
     class DataOriented:
@@ -589,7 +590,7 @@ def test_src_ll_cache_distinguishes_dataclass_integer_types(tmp_path: pathlib.Pa
             def read(arg: State) -> qd.i64:
                 return arg.value
 
-        state = State(value)
+        state = State(np.int32(value) if dtype == qd.i32 else np.int64(value))
         assert read(DataOriented(state) if in_data_oriented else state) == value
         assert read._primal.src_ll_cache_observations.cache_loaded == expect_hit
 

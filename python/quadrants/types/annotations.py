@@ -45,8 +45,23 @@ template = Template
 """
 
 
+class RuntimeTyped:
+    """A Python dataclass argument whose member types are inferred from the arriving instance.
+
+    Use the class itself as a kernel or function parameter annotation: ``state: qd.RuntimeTyped``.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        """Static type checkers see only RuntimeTyped, so they would otherwise reject accesses like state.velocity.
+
+        The Any return annotation allows arbitrary members without claiming to know their types.
+        The marker itself has no such members, so access raises AttributeError; callers supply dataclass instances.
+        """
+        raise AttributeError(name)
+
+
 class sparse_matrix_builder:
     pass
 
 
-__all__ = ["template", "sparse_matrix_builder", "Template"]
+__all__ = ["template", "sparse_matrix_builder", "Template", "RuntimeTyped"]

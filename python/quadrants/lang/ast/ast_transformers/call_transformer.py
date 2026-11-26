@@ -2,6 +2,7 @@
 
 import ast
 import inspect
+import math
 import operator
 import re
 import warnings
@@ -10,17 +11,21 @@ from collections import ChainMap
 from contextlib import nullcontext
 from typing import Any
 
+import numpy as np
+
 from quadrants.lang import (
     expr,
     impl,
     matrix,
 )
 from quadrants.lang import ops as qd_ops
+from quadrants.lang._runtime_typing.dataclass_schemas import dataclass_call_arguments
 from quadrants.lang.ast.ast_transformer_utils import (
     FuncCompilePassContext,
     get_decorator,
 )
 from quadrants.lang.exception import (
+    QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
 )
@@ -168,7 +173,6 @@ class CallTransformer:
         example ast:
         Call(func=Name(id='f2', ctx=Load()), args=[Name(id='my_struct_ab', ctx=Load())], keywords=[])
         """
-        is_func_base_wrapper = False
         is_static = get_decorator(ctx, node) in ("static", "static_assert")
 
         with ctx.static_scope_guard() if is_static else nullcontext():
@@ -178,10 +182,6 @@ class CallTransformer:
             build_stmts(ctx, node.args)
             build_stmts(ctx, node.keywords)
         func = node.func.ptr
-        func_type = type(func)
-
-        is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
-
         # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
         # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes
         # its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and
@@ -267,17 +267,24 @@ class CallTransformer:
         try:
             try:
                 pruning = ctx.kernel_compile_context.pruning
-                node.ptr = func(*py_args, **py_kwargs)
+                with (
+                    dataclass_call_arguments(func, py_args, py_kwargs, isinstance(func, BoundQuadrantsCallable))
+                    if isinstance(func, (QuadrantsCallable, BoundQuadrantsCallable)) and func._is_quadrants_function
+                    else nullcontext()
+                ):
+                    node.ptr = func(*py_args, **py_kwargs)
 
                 if not pruning.enforcing:
                     pruning.record_after_call(ctx, func, node, node_args, node_keywords)
+            except QuadrantsRuntimeTypeError:
+                raise
             except TypeError as e:
                 module = inspect.getmodule(func)
                 error_msg = re.sub(r"\bExpr\b", "Quadrants Expression", str(e))
                 func_name = getattr(func, "__name__", func.__class__.__name__)
                 msg = f"TypeError when calling `{func_name}`: {error_msg}."
                 if CallTransformer._is_external_func(ctx, node.func.ptr):
-                    args_has_expr = any([isinstance(arg, Expr) for arg in args])
+                    args_has_expr = any([isinstance(arg, Expr) for arg in py_args])
                     if args_has_expr and (module == math or module == np):
                         exec_str = f"from quadrants import {func.__name__}"
                         try:

@@ -134,6 +134,7 @@ void export_lang(nb::module_ &m) {
       .def("__str__", &DataType::to_string)
       .def("shape", &DataType::get_shape)
       .def("element_type", &DataType::get_element_type)
+      .def("get_compute_type", [](DataType dtype) { return DataType(dtype->get_compute_type()); })
       .def("ptr_removed", &DataType::ptr_removed)
       .def(
           "get_ptr", [](DataType *dtype) -> Type * { return *dtype; }, nb::rv_policy::reference)
