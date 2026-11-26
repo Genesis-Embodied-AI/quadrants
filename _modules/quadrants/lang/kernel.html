@@ -374,8 +374,10 @@
 <span class="c1"># construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">TemplateMapper</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._kernel_specialization_mapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">KernelSpecializationMapper</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._kernel_specialization_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">chain_has_mutable_container</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">KernelSimplicityASTChecker</span><span class="p">,</span>
@@ -864,7 +866,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_on_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Release cached arguments and launch metadata when the runtime publishes a reset."""</span>
         <span class="c1"># Specialization identifiers restart with the mapper; discard their launch metadata together.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span> <span class="o">=</span> <span class="n">TemplateMapper</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span> <span class="o">=</span> <span class="n">KernelSpecializationMapper</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">kernel_cpp</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_last_launch_key</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
@@ -1135,7 +1137,8 @@
 
         <span class="n">callbacks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">launch_ctx</span> <span class="o">=</span> <span class="n">t_kernel</span><span class="o">.</span><span class="n">make_launch_context</span><span class="p">()</span>
-        <span class="c1"># Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.</span>
+        <span class="c1"># Special treatment for primitive types is unecessary and detrimental. See 'KernelSpecializationMapper.lookup'</span>
+        <span class="c1"># for details.</span>
         <span class="n">args_hash</span><span class="p">:</span> <span class="s2">"ArgsHash"</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">t_kernel</span><span class="p">),</span> <span class="o">*</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">])</span>
         <span class="c1"># Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so</span>
         <span class="c1"># id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between</span>

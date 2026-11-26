@@ -358,9 +358,11 @@
     <span class="n">final_field_names</span><span class="p">,</span>
     <span class="n">is_final_annotation</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._kernel_specialization_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">_build_argument_specialization_signature</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._name_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span><span class="p">,</span> <span class="n">create_flat_name_from_parts</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._optional_annotation</span><span class="w"> </span><span class="kn">import</span> <span class="n">OPTIONAL_ABSENT</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">_extract_arg</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FuncCompilePassContext</span><span class="p">,</span>
     <span class="n">MemberBinding</span><span class="p">,</span>
@@ -412,7 +414,7 @@
         <span class="k">if</span> <span class="n">this_arg_spec_sig</span> <span class="ow">is</span> <span class="n">OPTIONAL_ABSENT</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
         <span class="c1"># qd.Tensor value-dispatch. The first slot of this_arg_spec_sig is a string marker placed by</span>
-        <span class="c1"># _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).</span>
+        <span class="c1"># _kernel_specialization_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).</span>
         <span class="k">if</span> <span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span><span class="p">:</span>
             <span class="k">assert</span> <span class="n">this_arg_spec_sig</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="n">marker</span> <span class="o">=</span> <span class="n">this_arg_spec_sig</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -529,7 +531,7 @@
                     <span class="n">field_spec_sig</span> <span class="o">=</span> <span class="p">(</span>
                         <span class="n">this_arg_spec_sig</span><span class="p">[</span><span class="n">field_idx</span><span class="p">]</span>
                         <span class="k">if</span> <span class="n">this_arg_spec_sig</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-                        <span class="k">else</span> <span class="n">_extract_arg</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">child</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">)</span>
+                        <span class="k">else</span> <span class="n">_build_argument_specialization_signature</span><span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">child</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">)</span>
                     <span class="p">)</span>
                     <span class="n">needs_declaration_call</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_decl_and_create_variable</span><span class="p">(</span>
                         <span class="n">ctx</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">,</span> <span class="n">field_spec_sig</span><span class="p">,</span> <span class="s2">""</span><span class="p">,</span> <span class="n">child</span>
@@ -808,7 +810,8 @@
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="c1"># BufferView arguments are passed by reference.</span>
-        <span class="c1"># Dtype validation happens at the kernel boundary (_template_mapper_hotpath._extract_arg),</span>
+        <span class="c1"># Dtype validation happens at the kernel boundary</span>
+        <span class="c1"># (_kernel_specialization_mapper_hotpath._build_argument_specialization_signature),</span>
         <span class="c1"># not here — data.arr is an Expr node during func compilation, not a real Ndarray.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="n">buffer_view_type</span><span class="o">.</span><span class="n">BufferViewType</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
