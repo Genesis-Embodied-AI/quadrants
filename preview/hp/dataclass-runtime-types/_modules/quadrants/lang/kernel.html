@@ -374,6 +374,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching.args_hasher</span><span class="w"> </span><span class="kn">import</span> <span class="n">LaunchArgSchemas</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._kernel_specialization_mapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">KernelSpecializationMapper</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._kernel_specialization_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">chain_has_mutable_container</span><span class="p">,</span>
 <span class="p">)</span>
@@ -845,6 +846,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span><span class="p">:</span> <span class="n">CompiledKernelKeyType</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">on_reset</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_on_reset</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Kernel.ast_builder">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.ast_builder">[docs]</a>
@@ -863,6 +865,22 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span> <span class="o">=</span> <span class="n">SrcLlCacheObservations</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fe_ll_cache_observations</span> <span class="o">=</span> <span class="n">FeLlCacheObservations</span><span class="p">()</span></div>
 
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_on_reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Release cached arguments and launch metadata when the runtime publishes a reset."""</span>
+        <span class="c1"># Specialization identifiers restart with the mapper; discard their launch metadata together.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span> <span class="o">=</span> <span class="n">KernelSpecializationMapper</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">template_slot_locations</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kernel_cpp</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_launch_key</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_infos_for_root_dataclasses_in_data_oriented_by_key</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_runtime_scalar_launch_infos_by_compiled_kernel_key</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">launch_context_buffer_cache</span> <span class="o">=</span> <span class="n">LaunchContextBufferCache</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">launch_observations</span> <span class="o">=</span> <span class="n">LaunchObservations</span><span class="p">()</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_try_load_fastcache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">"""Two-phase fastcache lookup: L1 (source+config, no args) for pruning info, then a narrow args walk over</span>
