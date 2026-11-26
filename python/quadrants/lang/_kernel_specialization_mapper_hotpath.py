@@ -410,10 +410,10 @@ def _build_argument_specialization_signature(
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        # Serve the ``_qd_spec_sig`` cache only in the default (non-strict) mode: the cached key is
-        # setting-independent, but the ``Final[float]`` guard below is not, and an early return would also skip the
-        # recursion that runs it on nested frozen dataclasses. A Final-bearing subtree is never served either - the
-        # write below refuses to store one, so this read falls through and re-runs validation each launch.
+        # Serve the ``_qd_spec_sig`` cache only in the default (non-strict) mode: the cached key is setting-independent,
+        # but the ``Final[float]`` guard below is not, and an early return would also skip the recursion that runs it on
+        # nested frozen dataclasses. A Final-bearing subtree is never served either - the write below refuses to store
+        # one, so this read falls through and re-runs validation each launch.
         #
         # Keyed by ``id(annotation)`` so a subclass extracted against different ancestor annotations caches a separate
         # key per view; the stored annotation is identity-checked on read, so a metaclass-equal ancestor or a recycled
@@ -487,8 +487,7 @@ def _build_argument_specialization_signature(
                     # FIXME: Avoid setattr and store this cache without modifying passed-in objects.
                     object.__setattr__(arg, "_qd_spec_sig", {id(annotation): (annotation, key)})
                 except AttributeError:
-                    # Impossible to store _qd_spec_sig at instance-level if 'slots=True'. It is
-                    # recomputed each time.
+                    # Impossible to store _qd_spec_sig at instance-level if 'slots=True'. It is recomputed each time.
                     pass
             else:
                 _key_map[id(annotation)] = (annotation, key)
