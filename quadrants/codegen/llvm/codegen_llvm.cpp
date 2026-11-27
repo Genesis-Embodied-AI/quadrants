@@ -1357,9 +1357,12 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
   bin_op[AtomicOpType::xchg] = llvm::AtomicRMWInst::BinOp::Xchg;
   QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
+  const bool accumulate =
+      stmt->op_type == AtomicOpType::add || stmt->op_type == AtomicOpType::min || stmt->op_type == AtomicOpType::max;
+  const auto ordering =
+      accumulate ? kernel_accumulate_atomic_ordering(current_arch()) : llvm::AtomicOrdering::SequentiallyConsistent;
   return builder->CreateAtomicRMW(bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
-                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
-                                  kernel_atomic_syncscope(llvm_context, current_arch()));
+                                  llvm::MaybeAlign(0), ordering, kernel_atomic_syncscope(llvm_context, current_arch()));
 }
 
 llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
@@ -1429,15 +1432,15 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
   switch (op) {
     case AtomicOpType::add:
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, llvm_val[stmt->dest], llvm_val[stmt->val],
-                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      llvm::MaybeAlign(0), kernel_accumulate_atomic_ordering(current_arch()),
                                       kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::min:
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMin, llvm_val[stmt->dest], llvm_val[stmt->val],
-                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      llvm::MaybeAlign(0), kernel_accumulate_atomic_ordering(current_arch()),
                                       kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::max:
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMax, llvm_val[stmt->dest], llvm_val[stmt->val],
-                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      llvm::MaybeAlign(0), kernel_accumulate_atomic_ordering(current_arch()),
                                       kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::mul:
       return atomic_op_using_cas(

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/Support/AtomicOrdering.h"
 
 #include "quadrants/rhi/arch.h"
 
@@ -31,6 +32,28 @@ inline llvm::SyncScope::ID kernel_atomic_syncscope(llvm::LLVMContext *ctx, Arch 
     return ctx->getOrInsertSyncScopeID("agent");
   }
   return llvm::SyncScope::System;
+}
+
+// Pick the LLVM memory ordering for the accumulating user-facing kernel atomics `qd.atomic_add` / `atomic_sub` /
+// `atomic_min` / `atomic_max` (and the `+=` / `-=` augmented assignments that lower to them), emitted by
+// `codegen_llvm.cpp`. These ops are documented as per-location atomic read-modify-writes that are not memory fences for
+// the rest of the address space (see `docs/source/user_guide/atomics.md`); cross-thread ordering of other memory goes
+// through `qd.simt.block.sync()`, `qd.simt.block.mem_fence()` / `qd.simt.grid.mem_fence()` or the kernel boundary,
+// which all emit their own fences. LLVM `monotonic` is exactly that contract: atomicity plus a single modification
+// order per location.
+//
+// On AMDGPU the ordering is not free. An agent-scope `seq_cst` RMW is lowered with a release fence before and an
+// acquire fence after the atomic; on parts with several L2 caches per agent (gfx942 / gfx950) these become an L2
+// writeback (`buffer_wbl2`) and an L2 invalidate (`buffer_inv`) around every single atomic, which makes kernels that do
+// many atomic accumulations bound by cache maintenance. `monotonic` lowers to the bare hardware atomic.
+//
+// The other RMWs (`atomic_and` / `or` / `xor` / `exchange`) and compare-and-swap keep `seq_cst`: hand-written lock and
+// flag protocols are built from those. Other backends keep `seq_cst` for every op.
+inline llvm::AtomicOrdering kernel_accumulate_atomic_ordering(Arch arch) {
+  if (arch == Arch::amdgpu) {
+    return llvm::AtomicOrdering::Monotonic;
+  }
+  return llvm::AtomicOrdering::SequentiallyConsistent;
 }
 
 }  // namespace quadrants::lang
